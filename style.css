@@ -1,4 +1,3 @@
-
 :root{--pg:#E8EEF7;--bg:#F4F7FC;--c:#fff;--t:#1C1B22;--m:#66708A;--b:#DFE6F2;--p:#1F6FEB;--pl:#E6F0FF;--g:#1E9E5A;--r:#D64545;--on:#fff}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--pg:#0A0E16;--bg:#111722;--c:#1B2332;--t:#EEF2FA;--m:#9AA7BF;--b:#2A3550;--p:#5B9DFF;--pl:#1B2C4A;--g:#3DD68C;--r:#F06A6A;--on:#06101F}}
 :root[data-theme=dark]{--pg:#0A0E16;--bg:#111722;--c:#1B2332;--t:#EEF2FA;--m:#9AA7BF;--b:#2A3550;--p:#5B9DFF;--pl:#1B2C4A;--g:#3DD68C;--r:#F06A6A;--on:#06101F}
@@ -112,10 +111,3 @@ label.l{margin:.65rem 0 .3rem}
 .bkr+small{font-size:.875rem;font-weight:400}
 ::placeholder{color:var(--m);opacity:.8}
 .pg{display:flex;flex-direction:column;min-height:100%}.pg .foot{margin-top:auto;padding-top:1.5rem}
-
-/* Added feature pages */
-.cap{font-size:.6875rem;font-weight:800;color:var(--m);letter-spacing:.04em;margin:.875rem .25rem .375rem}
-.iconrow{display:flex;align-items:center;gap:.75rem}
-.iconrow .ic{width:2.5rem;height:2.5rem;border-radius:.75rem}
-.badge{display:inline-flex;align-items:center;min-height:1.5rem;padding:0 .55rem;border-radius:.75rem;background:var(--pl);color:var(--p);font-size:.6875rem;font-weight:800}
-.switchline{display:flex;align-items:center;justify-content:space-between;gap:.75rem;min-height:3rem}
