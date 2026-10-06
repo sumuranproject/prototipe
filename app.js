@@ -1,6 +1,6 @@
 /* ============================================================
    SakuKasir Prototype — app.js
-   Fitur lengkap sesuai prompt. In-memory, no backend.
+   Fitur lengkap. Pengeluaran pindah ke Laporan (tab).
    ============================================================ */
 
 // ============================================================
@@ -75,7 +75,6 @@ const state = {
     },
     notifications: { lowStock: true, outOfStock: true, system: true },
   },
-  notifUnread: true,
 };
 
 // ============================================================
@@ -109,7 +108,10 @@ function nowTime() {
 }
 
 function nowDateTime() {
-  return new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date().toLocaleString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
 }
 
 function toast(msg, type = '') {
@@ -320,16 +322,15 @@ function renderNav() {
   const nav = $('#bottom-nav');
   if (state.user.role === 'cashier') {
     nav.innerHTML = `
-      ${navItem('pos', 'POS', 'M3 3h18v18H3z M9 3v18 M3 9h18')}
-      ${navItem('transactions', 'Transaksi', 'M4 6h16 M4 12h16 M4 18h10')}
-      ${navItem('shift', 'Shift', 'M12 2v10l5 3 M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20z')}
+      ${navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
+      ${navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>')}
+      ${navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
     `;
   } else {
     nav.innerHTML = `
-      ${navItem('dashboard', 'Dashboard', 'M3 3h7v9H3z M14 3h7v5h-7z M14 12h7v9h-7z M3 16h7v5H3z')}
-      ${navItem('pos', 'POS', 'M3 3h18v18H3z M9 3v18 M3 9h18')}
-      ${navItem('manage', 'Kelola', 'M4 7h16 M4 12h16 M4 17h10')}
-      ${navItem('reports', 'Laporan', 'M3 3v18h18 M7 15l4-4 3 3 5-7')}
+      ${navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>')}
+      ${navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
+      ${navItem('reports', 'Laporan', '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>')}
     `;
   }
   $$('.nav-item').forEach((el) => {
@@ -343,13 +344,13 @@ function renderNav() {
   });
 }
 
-function navItem(view, label, path) {
+function navItem(view, label, svgInner) {
   const active =
     (state.user.role === 'cashier' && state.activeView === view) ||
     (state.user.role === 'owner' && state.ownerTab === view);
   return `
     <button class="nav-item ${active ? 'active' : ''}" data-view="${view}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${svgInner}</svg>
       <span>${label}</span>
     </button>`;
 }
@@ -364,7 +365,6 @@ function renderMain() {
   if (v === 'dashboard') return renderDashboard(main);
   if (v === 'transactions') return renderTransactions(main);
   if (v === 'shift') return renderShift(main);
-  if (v === 'manage') return renderManage(main);
   if (v === 'reports') return renderReports(main);
 }
 
@@ -408,7 +408,7 @@ function renderProductGrid() {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <div class="empty-title">Produk tidak ditemukan</div>
-      <div class="empty-sub">Coba kata kunci lain, atau tambahkan produk baru di menu Kelola.</div>
+      <div class="empty-sub">Coba kata kunci lain, atau tambahkan produk baru via menu Kelola.</div>
     </div>`;
     return;
   }
@@ -605,13 +605,11 @@ function openCheckout() {
         };
         state.transactions.unshift(tx);
         if (!state.online) state.syncQueue.push({ type: 'transaction', id: tx.id });
-        // Update shift
         if (state.activeShift) {
           state.activeShift.transactions++;
           if (method === 'cash') state.activeShift.cashSales += t.total;
           else state.activeShift.qrisSales += t.total;
         }
-        // Update stock
         state.cart.forEach(item => {
           const p = state.products.find(x => x.id === item.id);
           if (p && p.track) p.stock = Math.max(0, p.stock - item.qty);
@@ -685,7 +683,7 @@ function renderTransactions(main) {
     <div class="tx-list" id="tx-list">
       ${txList.length ? txList.map(renderTxItem).join('') : `
         <div class="empty">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16 M4 12h16 M4 18h10"/></svg>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>
           <div class="empty-title">Belum ada transaksi</div>
           <div class="empty-sub">Transaksi hari ini akan muncul di sini.</div>
         </div>`}
@@ -875,7 +873,7 @@ function renderDashboard(main) {
     return;
   }
 
-  // Owner
+  // Owner dashboard
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
@@ -900,8 +898,8 @@ function renderDashboard(main) {
           const max = Math.max(...[1200, 1800, 1400, 2100, 1900, 2200, Math.round(totalSales/1000)], 1000);
           const h = Math.max(8, (v / max) * 100);
           const days = ['S','S','R','K','J','S','M'];
-          const today = i === 6;
-          return `<div class="bar-col"><div class="bar ${today ? 'today' : ''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`;
+          const isToday = i === 6;
+          return `<div class="bar-col"><div class="bar ${isToday ? 'today' : ''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`;
         }).join('')}
       </div>
     </div>
@@ -927,68 +925,95 @@ function renderDashboard(main) {
 }
 
 // ============================================================
-// 11. MANAGE (Kelola) — Owner only
+// 11. SIDEBAR (Kelola untuk Owner) — Pengeluaran sudah dipindah
 // ============================================================
-function renderManage(main) {
+function renderSidebar() {
+  const body = $('#sidebar-body');
+  if (!body) return;
+
+  const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
+  const outCount = state.products.filter(p => p.track && p.stock === 0).length;
+  const stockBadge = (lowCount + outCount) > 0
+    ? { text: `${lowCount + outCount} low`, cls: 'warn' }
+    : null;
+
   const groups = [
     {
       title: 'Katalog',
       items: [
-        { label: 'Produk', sub: `${state.products.filter(p=>p.active).length} aktif · ${state.products.filter(p=>!p.active).length} nonaktif`, route: 'products' },
-        { label: 'Kategori', sub: `${state.categories.length} kategori`, route: 'categories' },
-        { label: 'Stok', sub: `${state.products.filter(p=>p.track && p.stock<=p.low).length} low/out`, route: 'inventory' },
+        { label: 'Produk', route: 'products', count: state.products.length },
+        { label: 'Kategori', route: 'categories', count: state.categories.length },
+        { label: 'Stok', route: 'inventory', badge: stockBadge },
       ],
     },
     {
       title: 'Bisnis',
       items: [
-        { label: 'Outlet', sub: `${state.outlets.length} outlet`, route: 'outlets' },
-        { label: 'Kasir', sub: `${state.workers.length} pekerja`, route: 'workers' },
-        { label: 'Pengeluaran', sub: `${state.expenses.length} catatan`, route: 'expenses' },
+        { label: 'Outlet', route: 'outlets', count: state.outlets.length },
+        { label: 'Kasir', route: 'workers', count: state.workers.length },
       ],
     },
     {
       title: 'Pengaturan',
       items: [
-        { label: 'QRIS', sub: state.settings.qris.active ? 'Aktif' : 'Belum diatur', route: 'qris' },
-        { label: 'Printer', sub: state.settings.printer.connected ? 'Terhubung' : 'Belum', route: 'printer' },
-        { label: 'Struk', sub: state.settings.receipt.bizName, route: 'receipt' },
-        { label: 'Notifikasi', sub: 'Stok & sistem', route: 'notif-settings' },
-        { label: 'Sinkronisasi', sub: `${state.syncQueue.length} pending`, route: 'sync-settings' },
-        { label: 'Tema', sub: state.theme === 'dark' ? 'Gelap' : 'Terang', route: 'theme-settings' },
-        { label: 'Profil', sub: state.user.displayName, route: 'profile' },
-        { label: 'Tentang', sub: 'Versi prototipe', route: 'about' },
+        { label: 'QRIS', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+        { label: 'Printer', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+        { label: 'Struk', route: 'receipt' },
+        { label: 'Notifikasi', route: 'notif-settings' },
+        { label: 'Sinkronisasi', route: 'sync-settings', count: state.syncQueue.length || null },
+        { label: 'Tema', route: 'theme-settings', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } },
+        { label: 'Profil', route: 'profile' },
+        { label: 'Tentang', route: 'about' },
       ],
     },
   ];
 
-  main.innerHTML = `
-    <div class="page-head"><div><h2>Kelola</h2></div></div>
-    ${groups.map(g => `
-      <div class="settings-group">
-        <div class="section-title" style="margin-top:0">${g.title}</div>
-        ${g.items.map(it => `
-          <button class="settings-item" data-route="${it.route}">
-            <div class="si-body">
-              <div class="si-title">${it.label}</div>
-              <div class="si-sub">${it.sub}</div>
-            </div>
-            <svg class="si-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
-          </button>`).join('')}
-      </div>`).join('')}
-  `;
-  $$('.settings-item').forEach(el => {
-    el.onclick = () => routeManage(el.dataset.route);
+  body.innerHTML = groups.map(g => `
+    <div class="sidebar-group-title">${g.title}</div>
+    ${g.items.map(it => `
+      <button class="sidebar-item" data-route="${it.route}">
+        <span class="si-label">${it.label}</span>
+        ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
+        ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+      </button>
+    `).join('')}
+  `).join('');
+
+  body.querySelectorAll('[data-route]').forEach(el => {
+    el.onclick = () => {
+      closeSidebar();
+      routeManage(el.dataset.route);
+    };
   });
 }
 
+function openSidebar() {
+  if (!state.user || state.user.role !== 'owner') return;
+  renderSidebar();
+  $('#sidebar').hidden = false;
+  $('#sidebar-backdrop').hidden = false;
+}
+function closeSidebar() {
+  $('#sidebar').hidden = true;
+  $('#sidebar-backdrop').hidden = true;
+}
+
+$('#brand-mark').addEventListener('click', openSidebar);
+$('#brand-mark').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSidebar(); }
+});
+$('#sidebar-close').addEventListener('click', closeSidebar);
+$('#sidebar-backdrop').addEventListener('click', closeSidebar);
+
+// ============================================================
+// 12. ROUTER UNTUK SIDEBAR
+// ============================================================
 function routeManage(route) {
   if (route === 'products') return pageProducts();
   if (route === 'categories') return pageCategories();
   if (route === 'inventory') return pageInventory();
   if (route === 'outlets') return pageOutlets();
   if (route === 'workers') return pageWorkers();
-  if (route === 'expenses') return pageExpenses();
   if (route === 'qris') return pageQRIS();
   if (route === 'printer') return pagePrinterSettings();
   if (route === 'receipt') return pageReceiptSettings();
@@ -1000,14 +1025,14 @@ function routeManage(route) {
 }
 
 // ============================================================
-// 12. PRODUCTS PAGE
+// 13. PRODUCTS PAGE
 // ============================================================
 function pageProducts() {
   const main = $('#main');
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Produk</h2><div class="sub">${state.products.length} produk</div></div>
-      <button class="btn btn-ghost" id="back-manage">← Kembali</button>
+      <button class="btn btn-ghost" id="back-home">← Beranda</button>
     </div>
     <div class="pos-search" style="margin-bottom:12px">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -1019,7 +1044,7 @@ function pageProducts() {
   renderProdList();
   $('#prod-search').oninput = renderProdList;
   $('#add-prod').onclick = () => productForm(null);
-  $('#back-manage').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+  $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
 }
 
 function renderProdList() {
@@ -1080,7 +1105,7 @@ function productForm(id) {
       </div>
       <label class="field"><span>Harga jual (Rp)</span><input type="number" id="p-price" value="${data.price}" step="500" min="0" /></label>
       <div class="switch-row">
-        <div><div style="font-weight:500">Stock tracking</div><div class="muted small">Pantau stok & dapat notifikasi low stock</div></div>
+        <div><div style="font-weight:500">Stock tracking</div><div class="muted small">Pantau stok & notifikasi low stock</div></div>
         <button class="switch ${data.track ? 'on' : ''}" id="p-track"></button>
       </div>
       <div id="p-stock-section" ${data.track ? '' : 'hidden'}>
@@ -1090,7 +1115,7 @@ function productForm(id) {
         </div>
       </div>
       <div class="switch-row">
-        <div><div style="font-weight:500">Aktif</div><div class="muted small">Produk nonaktif tidak muncul di POS</div></div>
+        <div><div style="font-weight:500">Aktif</div><div class="muted small">Nonaktif tidak muncul di POS</div></div>
         <button class="switch ${data.active ? 'on' : ''}" id="p-active"></button>
       </div>
       <div class="form-actions">
@@ -1133,7 +1158,7 @@ function productForm(id) {
 }
 
 // ============================================================
-// 13. CATEGORIES PAGE
+// 14. CATEGORIES PAGE
 // ============================================================
 function pageCategories() {
   const main = $('#main');
@@ -1141,7 +1166,7 @@ function pageCategories() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Kategori</h2><div class="sub">${state.categories.length} kategori</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="tx-list">
         ${state.categories.map(c => {
@@ -1165,7 +1190,7 @@ function pageCategories() {
       </div>
       <button class="fab" id="add-cat">+</button>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $('#add-cat').onclick = () => {
       promptModal('Kategori baru', 'Nama kategori', '', (v) => {
         if (!v.trim()) return;
@@ -1198,7 +1223,7 @@ function pageCategories() {
 }
 
 // ============================================================
-// 14. INVENTORY PAGE
+// 15. INVENTORY PAGE
 // ============================================================
 function pageInventory() {
   const main = $('#main');
@@ -1209,7 +1234,7 @@ function pageInventory() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Stok</h2><div class="sub">${tracked.length} produk dilacak</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="kpi-compact">
         <div><div class="label">Low stock</div><div class="amount" style="color:var(--warn)">${low.length}</div></div>
@@ -1235,10 +1260,10 @@ function pageInventory() {
                 </div>
               </div>
             </div>`;
-        }).join('')}
+        }).join('') || '<div class="empty"><div class="empty-title">Belum ada produk tracked</div></div>'}
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $$('[data-adjust]').forEach(b => b.onclick = () => {
       const p = state.products.find(x => x.id === parseInt(b.dataset.adjust));
       openSheet(`
@@ -1258,7 +1283,6 @@ function pageInventory() {
       let mode = 'minus';
       $('#mode-plus').onclick = () => { mode = 'plus'; $('#mode-plus').className = 'btn btn-primary'; $('#mode-minus').className = 'btn btn-ghost'; };
       $('#mode-minus').onclick = () => { mode = 'minus'; $('#mode-minus').className = 'btn btn-primary'; $('#mode-plus').className = 'btn btn-ghost'; };
-      $('#mode-minus').className = 'btn btn-primary';
       $('#adj-cancel').onclick = closeSheet;
       $('#adj-save').onclick = () => {
         const qty = parseInt($('#adj-qty').value) || 0;
@@ -1275,7 +1299,7 @@ function pageInventory() {
 }
 
 // ============================================================
-// 15. OUTLETS PAGE
+// 16. OUTLETS PAGE
 // ============================================================
 function pageOutlets() {
   const main = $('#main');
@@ -1283,7 +1307,7 @@ function pageOutlets() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Outlet</h2><div class="sub">${state.outlets.length} outlet</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="tx-list">
         ${state.outlets.map(o => `
@@ -1304,7 +1328,7 @@ function pageOutlets() {
       </div>
       <button class="fab" id="add-outlet">+</button>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $('#add-outlet').onclick = () => outletForm(null);
     $$('[data-edit]').forEach(b => b.onclick = () => outletForm(parseInt(b.dataset.edit)));
     $$('[data-del]').forEach(b => b.onclick = () => {
@@ -1355,7 +1379,7 @@ function outletForm(id) {
 }
 
 // ============================================================
-// 16. WORKERS PAGE
+// 17. WORKERS PAGE
 // ============================================================
 function pageWorkers() {
   const main = $('#main');
@@ -1363,7 +1387,7 @@ function pageWorkers() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Kasir</h2><div class="sub">${state.workers.length} pekerja</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="tx-list">
         ${state.workers.map(w => `
@@ -1384,7 +1408,7 @@ function pageWorkers() {
       </div>
       <button class="fab" id="add-worker">+</button>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $('#add-worker').onclick = () => workerForm(null);
     $$('[data-edit]').forEach(b => b.onclick = () => workerForm(parseInt(b.dataset.edit)));
     $$('[data-toggle]').forEach(b => b.onclick = () => {
@@ -1443,96 +1467,6 @@ function workerForm(id) {
 }
 
 // ============================================================
-// 17. EXPENSES PAGE
-// ============================================================
-function pageExpenses() {
-  const main = $('#main');
-  const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
-  const render = () => {
-    const total = state.expenses.reduce((s, e) => s + e.amount, 0);
-    main.innerHTML = `
-      <div class="page-head">
-        <div><h2>Pengeluaran</h2><div class="sub">${state.expenses.length} catatan</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
-      </div>
-      <div class="kpi-hero">
-        <div class="label">Total pengeluaran</div>
-        <div class="amount amount-expense">${rupiah(total)}</div>
-      </div>
-      <div class="tx-list">
-        ${state.expenses.map(e => `
-          <div class="list-row">
-            <div>
-              <div class="row-title">${e.note || e.category}</div>
-              <div class="row-sub">${e.category} · ${e.date} · ${e.by}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
-              <div class="row-actions">
-                <button class="icon-btn sm" data-edit="${e.id}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                </button>
-                <button class="icon-btn sm" data-del="${e.id}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap + untuk catat pengeluaran.</div></div>'}
-      </div>
-      <button class="fab" id="add-exp">+</button>
-    `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
-    $('#add-exp').onclick = () => expForm(null, CATS);
-    $$('[data-edit]').forEach(b => b.onclick = () => expForm(parseInt(b.dataset.edit), CATS));
-    $$('[data-del]').forEach(b => b.onclick = () => {
-      const e = state.expenses.find(x => x.id === b.dataset.del);
-      confirmModal('Hapus pengeluaran?', `"${e.note}" akan dihapus.`, 'Hapus', () => {
-        state.expenses = state.expenses.filter(x => x.id !== e.id);
-        render();
-      });
-    });
-  };
-  render();
-}
-
-function expForm(id, CATS) {
-  const e = id ? state.expenses.find(x => x.id === id) : null;
-  const isEdit = !!e;
-  const data = e || { amount: 0, category: CATS[0], note: '', date: nowDateTime() };
-  openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
-    <div class="form-page">
-      <label class="field"><span>Nominal (Rp)</span><input type="number" id="e-amount" value="${data.amount}" step="1000" min="0" /></label>
-      <label class="field"><span>Kategori</span>
-        <select id="e-cat">${CATS.map(c => `<option ${c===data.category?'selected':''}>${c}</option>`).join('')}</select>
-      </label>
-      <label class="field"><span>Catatan</span><input type="text" id="e-note" value="${data.note}" placeholder="Deskripsi singkat" /></label>
-      <div class="form-actions">
-        <button class="btn btn-ghost" id="e-cancel">Batal</button>
-        <button class="btn btn-primary" id="e-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
-      </div>
-    </div>
-  `);
-  $('#e-cancel').onclick = closeSheet;
-  $('#e-save').onclick = () => {
-    const amount = parseInt($('#e-amount').value) || 0;
-    if (amount <= 0) return toast('Nominal harus > 0', 'error');
-    const obj = {
-      amount,
-      category: $('#e-cat').value,
-      note: $('#e-note').value.trim(),
-      date: isEdit ? data.date : nowDateTime(),
-      by: state.user.displayName,
-    };
-    if (isEdit) Object.assign(e, obj);
-    else state.expenses.push({ id: uid('EXP'), ...obj });
-    closeSheet();
-    pageExpenses();
-    toast('Pengeluaran disimpan', 'success');
-  };
-}
-
-// ============================================================
 // 18. QRIS SETTINGS
 // ============================================================
 function pageQRIS() {
@@ -1541,7 +1475,7 @@ function pageQRIS() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>QRIS</h2><div class="sub">Pengaturan pembayaran QR</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         <div style="text-align:center;padding:24px;border:1px dashed var(--border-strong);border-radius:var(--radius)">
@@ -1559,7 +1493,7 @@ function pageQRIS() {
         </div>
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $('#q-active').onclick = (e) => {
       state.settings.qris.active = !state.settings.qris.active;
       e.target.classList.toggle('on', state.settings.qris.active);
@@ -1589,7 +1523,7 @@ function pagePrinterSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Printer</h2><div class="sub">Bluetooth thermal</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         <div class="switch-row" style="padding:0">
@@ -1607,7 +1541,7 @@ function pagePrinterSettings() {
         </div>
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     if ($('#pr-scan')) $('#pr-scan').onclick = () => {
       toast('Mencari printer…');
       setTimeout(() => {
@@ -1634,7 +1568,7 @@ function pageReceiptSettings() {
   const r = state.settings.receipt;
   const render = () => {
     const preview = `
-${r.bizName.padStart((32 + r.bizName.length) / 2).padEnd(32)}
+${r.bizName}
 ──────────────────────────
 ${r.showTxNumber ? 'TRX-20261006-0042' : ''}
 06 Okt 2026 · 14:32
@@ -1653,7 +1587,7 @@ ${r.footer}
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Struk</h2><div class="sub">Format & konten</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         <label class="field"><span>Nama bisnis (header)</span><input type="text" id="r-biz" value="${r.bizName}" /></label>
@@ -1671,7 +1605,7 @@ ${r.footer}
         <button class="btn btn-primary btn-block" id="r-save">Simpan</button>
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $$('[data-sw]').forEach(b => b.onclick = (e) => {
       const key = b.dataset.sw;
       r[key] = !r[key];
@@ -1699,7 +1633,7 @@ function pageNotifSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Notifikasi</h2><div class="sub">Preferensi</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         <div class="switch-row"><div style="font-weight:500">Stok menipis</div><button class="switch ${n.lowStock?'on':''}" data-n="lowStock"></button></div>
@@ -1707,7 +1641,7 @@ function pageNotifSettings() {
         <div class="switch-row"><div style="font-weight:500">Sistem</div><button class="switch ${n.system?'on':''}" data-n="system"></button></div>
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $$('[data-n]').forEach(b => b.onclick = (e) => {
       const key = b.dataset.n;
       n[key] = !n[key];
@@ -1726,7 +1660,7 @@ function pageSyncSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Sinkronisasi</h2><div class="sub">Status & queue</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         <div class="shift-row"><span class="lbl">Status</span><span class="val">${state.online ? 'Online' : 'Offline'}</span></div>
@@ -1748,7 +1682,7 @@ function pageSyncSettings() {
         </button>
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $('#sync-now-btn').onclick = () => {
       state.syncQueue = [];
       updateSyncIndicator();
@@ -1768,7 +1702,7 @@ function pageThemeSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Tema</h2><div class="sub">Preferensi tampilan</div></div>
-        <button class="btn btn-ghost" id="back">← Kembali</button>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="form-section">
         ${['light', 'dark'].map(t => `
@@ -1781,7 +1715,7 @@ function pageThemeSettings() {
           </button>`).join('')}
       </div>
     `;
-    $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+    $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
     $$('[data-theme]').forEach(b => b.onclick = () => {
       applyTheme(b.dataset.theme);
       render();
@@ -1798,7 +1732,7 @@ function pageProfile() {
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Profil</h2></div>
-      <button class="btn btn-ghost" id="back">← Kembali</button>
+      <button class="btn btn-ghost" id="back-home">← Beranda</button>
     </div>
     <div class="form-section">
       <div class="field"><span>Nama</span><input type="text" value="${state.user.displayName}" disabled /></div>
@@ -1809,7 +1743,7 @@ function pageProfile() {
       <button class="btn btn-ghost btn-block" id="p-logout">Keluar</button>
     </div>
   `;
-  $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+  $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
   $('#p-logout').onclick = () => { $('#logout-btn').click(); };
 }
 
@@ -1821,23 +1755,34 @@ function pageAbout() {
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Tentang</h2></div>
-      <button class="btn btn-ghost" id="back">← Kembali</button>
+      <button class="btn btn-ghost" id="back-home">← Beranda</button>
     </div>
     <div class="form-section">
-      <div class="brand-mark">SK</div>
+      <div class="brand-mark" style="cursor:default">SK</div>
       <div style="font-weight:600;font-size:16px">SakuKasir</div>
       <div class="muted small">Versi prototipe · 2026</div>
       <p class="muted small" style="margin:12px 0 0">Point of Sale untuk usaha kecil dan menengah. Fitur lengkap dengan role-based UI, offline-first, dan printer Bluetooth.</p>
     </div>
   `;
-  $('#back').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); };
+  $('#back-home').onclick = () => { state.ownerTab = 'dashboard'; renderNav(); renderMain(); };
 }
 
 // ============================================================
-// 26. REPORTS
+// 26. REPORTS — dengan tab Pengeluaran
 // ============================================================
 function renderReports(main) {
   let tab = 'summary';
+
+  const TABS = [
+    { id: 'summary', label: 'Ringkasan' },
+    { id: 'outlet', label: 'Outlet' },
+    { id: 'cashier', label: 'Kasir' },
+    { id: 'daily', label: 'Harian' },
+    { id: 'monthly', label: 'Bulanan' },
+    { id: 'finance', label: 'Keuangan' },
+    { id: 'expense', label: 'Pengeluaran' },
+  ];
+
   const render = () => {
     const today = new Date().toISOString().slice(0, 10);
     const monthPrefix = today.slice(0, 7);
@@ -1861,17 +1806,17 @@ function renderReports(main) {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Laporan</h2><div class="sub">Periode: ${tab === 'monthly' ? 'Bulan ini' : 'Hari ini'}</div></div>
-        <button class="btn btn-ghost" id="export">Export XLSX</button>
+        ${tab !== 'expense' ? '<button class="btn btn-ghost" id="export">Export XLSX</button>' : ''}
       </div>
       <div class="tabs">
-        ${['summary','outlet','cashier','daily','monthly','finance'].map(t => `
-          <button data-tab="${t}" class="${tab === t ? 'active' : ''}">${t === 'summary' ? 'Ringkasan' : t === 'outlet' ? 'Outlet' : t === 'cashier' ? 'Kasir' : t === 'daily' ? 'Harian' : t === 'monthly' ? 'Bulanan' : 'Keuangan'}</button>
+        ${TABS.map(t => `
+          <button data-tab="${t.id}" class="${tab === t.id ? 'active' : ''}">${t.label}</button>
         `).join('')}
       </div>
 
       ${tab === 'summary' ? `
         <div class="kpi-hero">
-          <div class="label">Penjualan ${tab === 'monthly' ? 'bulan ini' : 'hari ini'}</div>
+          <div class="label">Penjualan hari ini</div>
           <div class="amount">${rupiah(sales)}</div>
           <div class="delta">${tx.length} transaksi</div>
         </div>
@@ -1946,16 +1891,116 @@ function renderReports(main) {
           <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
         </div>
       ` : ''}
+
+      ${tab === 'expense' ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <div>
+            <div style="font-weight:600">Pengeluaran</div>
+            <div class="muted small">${state.expenses.length} catatan</div>
+          </div>
+          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
+        </div>
+        <div class="kpi-hero">
+          <div class="label">Total pengeluaran</div>
+          <div class="amount amount-expense">${rupiah(expense)}</div>
+        </div>
+        <div class="kpi-compact" style="margin-bottom:16px">
+          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
+            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
+            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
+          }).join('')}
+        </div>
+        <div class="tx-list">
+          ${state.expenses.length ? state.expenses.map(e => `
+            <div class="list-row">
+              <div>
+                <div class="row-title">${e.note || e.category}</div>
+                <div class="row-sub">${e.category} · ${e.date} · ${e.by}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
+                <div class="row-actions">
+                  <button class="icon-btn sm" data-edit-exp="${e.id}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="icon-btn sm" data-del-exp="${e.id}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>`).join('')
+          : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap tombol + Tambah untuk catat pengeluaran.</div></div>'}
+        </div>
+      ` : ''}
     `;
 
     $$('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-    $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+    if ($('#export')) $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+
+    if (tab === 'expense') {
+      const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+      $('#add-exp-report').onclick = () => expForm(null, CATS, render);
+      $$('[data-edit-exp]').forEach(b => b.onclick = () => {
+        const id = b.getAttribute('data-edit-exp');
+        expForm(id, CATS, render);
+      });
+      $$('[data-del-exp]').forEach(b => b.onclick = () => {
+        const id = b.getAttribute('data-del-exp');
+        const e = state.expenses.find(x => x.id === id);
+        if (!e) return;
+        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
+          state.expenses = state.expenses.filter(x => x.id !== e.id);
+          render();
+          toast('Pengeluaran dihapus');
+        });
+      });
+    }
   };
   render();
 }
 
 // ============================================================
-// 27. HEADER ACTIONS
+// 27. EXPENSE FORM (dipakai dari tab Laporan)
+// ============================================================
+function expForm(id, CATS, onDone) {
+  const e = id ? state.expenses.find(x => x.id === id) : null;
+  const isEdit = !!e;
+  const data = e || { amount: 0, category: CATS[0], note: '', date: nowDateTime() };
+  openSheet(`
+    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
+    <div class="form-page">
+      <label class="field"><span>Nominal (Rp)</span><input type="number" id="e-amount" value="${data.amount}" step="1000" min="0" /></label>
+      <label class="field"><span>Kategori</span>
+        <select id="e-cat">${CATS.map(c => `<option ${c===data.category?'selected':''}>${c}</option>`).join('')}</select>
+      </label>
+      <label class="field"><span>Catatan</span><input type="text" id="e-note" value="${data.note}" placeholder="Deskripsi singkat" /></label>
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="e-cancel">Batal</button>
+        <button class="btn btn-primary" id="e-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
+      </div>
+    </div>
+  `);
+  $('#e-cancel').onclick = closeSheet;
+  $('#e-save').onclick = () => {
+    const amount = parseInt($('#e-amount').value) || 0;
+    if (amount <= 0) return toast('Nominal harus > 0', 'error');
+    const obj = {
+      amount,
+      category: $('#e-cat').value,
+      note: $('#e-note').value.trim(),
+      date: isEdit ? data.date : nowDateTime(),
+      by: state.user.displayName,
+    };
+    if (isEdit) Object.assign(e, obj);
+    else state.expenses.push({ id: uid('EXP'), ...obj });
+    closeSheet();
+    if (typeof onDone === 'function') onDone();
+    toast('Pengeluaran disimpan', 'success');
+  };
+}
+
+// ============================================================
+// 28. HEADER ACTIONS
 // ============================================================
 function updateSyncIndicator() {
   const dot = $('#sync-indicator .sync-dot');
@@ -2011,11 +2056,41 @@ $('#sync-now-inline').onclick = () => {
   toast('Sinkronisasi selesai', 'success');
 };
 
-$('#printer-indicator').onclick = () => { state.ownerTab = 'manage'; renderNav(); renderMain(); pagePrinterSettings(); };
+$('#printer-indicator').onclick = () => {
+  if (state.user && state.user.role === 'owner') {
+    pagePrinterSettings();
+  } else {
+    openSheet(`
+      <h3 style="font-size:17px;margin-bottom:4px">Printer Bluetooth</h3>
+      <p class="muted small" style="margin:0 0 16px">${state.settings.printer.connected ? 'Terhubung: ' + state.settings.printer.device : 'Belum ada printer terhubung'}</p>
+      <div style="display:grid;gap:8px">
+        ${state.settings.printer.connected
+          ? `<button class="btn btn-ghost btn-block" id="test-print-c">Test print</button>
+             <button class="btn btn-danger btn-block" id="disconnect-c">Putuskan</button>`
+          : `<button class="btn btn-primary btn-block" id="scan-printer-c">Cari printer</button>`}
+      </div>
+    `);
+    const scan = $('#scan-printer-c');
+    if (scan) scan.onclick = () => {
+      toast('Mencari printer…');
+      setTimeout(() => {
+        state.settings.printer.connected = true;
+        closeSheet();
+        toast('SK-Printer-58mm terhubung', 'success');
+      }, 1200);
+    };
+    const disc = $('#disconnect-c');
+    if (disc) disc.onclick = () => {
+      state.settings.printer.connected = false;
+      closeSheet();
+      toast('Printer diputus');
+    };
+    const tp = $('#test-print-c');
+    if (tp) tp.onclick = () => toast('Test print terkirim');
+  }
+};
 
 $('#notif-btn').onclick = () => {
-  state.notifUnread = false;
-  $('#notif-dot').style.display = 'none';
   const list = state.notifications;
   openSheet(`
     <h3 style="font-size:17px;margin-bottom:12px">Notifikasi</h3>
@@ -2030,6 +2105,7 @@ $('#notif-btn').onclick = () => {
         </div>`).join('')}
     </div>` : '<div class="empty"><div class="empty-title">Tidak ada notifikasi</div></div>'}
   `);
+  $('#notif-dot').style.display = 'none';
 };
 
 $('#theme-btn').onclick = () => {
@@ -2062,7 +2138,7 @@ $('#outlet-chip').onclick = () => {
 $('#sheet-backdrop').onclick = closeSheet;
 
 // ============================================================
-// 28. PRINT RECEIPT (simulasi)
+// 29. PRINT RECEIPT (simulasi)
 // ============================================================
 function printReceipt(tx) {
   const r = state.settings.receipt;
@@ -2109,6 +2185,6 @@ function printReceipt(tx) {
 }
 
 // ============================================================
-// 29. INIT
+// 30. INIT
 // ============================================================
 updateSyncIndicator();
