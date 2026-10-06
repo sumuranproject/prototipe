@@ -1,16 +1,153 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Saku Kasir — Point of Sale</title>
-<link rel="icon" href="data:image/png;base64,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">
-<link rel="stylesheet" href="style.css">
-<!-- Saku Kasir DPI reference: split from exact saku-kasir-dpi.html; Edit Struk reference added in app.js. -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0F5132" />
+  <title>SakuKasir</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<div id="app"><div id="v"></div><div id="modal" onclick="if(event.target===this)closeM()"><div class="sheet"></div></div><div id="toast"></div></div>
-<div id="print"></div>
-<script src="app.js"></script>
+
+  <!-- ============ LOGIN ============ -->
+  <section id="view-login" class="view active">
+    <div class="login-wrap">
+      <div class="login-brand">
+        <div class="brand-mark">SK</div>
+        <h1>SakuKasir</h1>
+        <p class="muted">Point of Sale untuk usaha kamu</p>
+      </div>
+      <form id="login-form" class="card login-card">
+        <label class="field">
+          <span>Username</span>
+          <input type="text" id="login-user" autocomplete="username" placeholder="owner / kasir" required />
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="login-pass" autocomplete="current-password" required />
+        </label>
+        <p class="hint">Demo: <b>owner</b> atau <b>kasir</b> · password bebas</p>
+        <div id="login-error" class="form-error" hidden></div>
+        <button type="submit" class="btn btn-primary btn-block">Masuk</button>
+        <div class="login-links">
+          <button type="button" class="btn-link" id="show-register">Daftar sebagai Owner</button>
+          <button type="button" class="btn-link" id="show-forgot">Lupa password?</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ REGISTER (2 tahap) ============ -->
+  <section id="view-register" class="view">
+    <div class="login-wrap">
+      <div class="login-brand">
+        <div class="brand-mark">SK</div>
+        <h1>Daftar Owner</h1>
+        <p class="muted" id="register-step-label">Tahap 1 dari 2</p>
+      </div>
+      <form id="register-form" class="card login-card">
+        <div id="register-step-1">
+          <div class="step-dots"><span class="active"></span><span></span></div>
+          <label class="field"><span>Username</span><input type="text" id="reg-username" required /></label>
+          <label class="field"><span>Email</span><input type="email" id="reg-email" required /></label>
+          <label class="field"><span>Password</span><input type="password" id="reg-password" minlength="6" required /></label>
+          <label class="field"><span>Nama tampilan</span><input type="text" id="reg-displayname" required /></label>
+          <button type="submit" class="btn btn-primary btn-block">Lanjut</button>
+        </div>
+        <div id="register-step-2" hidden>
+          <div class="step-dots"><span class="done"></span><span class="active"></span></div>
+          <label class="field"><span>Nama bisnis</span><input type="text" id="reg-bizname" required /></label>
+          <label class="field"><span>Tipe bisnis</span>
+            <select id="reg-biztype" required>
+              <option value="">Pilih tipe</option>
+              <option>Kafe / Coffee Shop</option>
+              <option>Restoran</option>
+              <option>Warung / Kelontong</option>
+              <option>Retail</option>
+              <option>Jasa</option>
+              <option>Lainnya</option>
+            </select>
+          </label>
+          <label class="field"><span>Nomor kontak (opsional)</span><input type="tel" id="reg-phone" /></label>
+          <div style="display:flex;gap:8px">
+            <button type="button" class="btn btn-ghost" id="reg-back">Kembali</button>
+            <button type="submit" class="btn btn-primary" style="flex:1">Daftar</button>
+          </div>
+        </div>
+      </form>
+      <button type="button" class="btn-link" id="reg-cancel">Kembali ke login</button>
+    </div>
+  </section>
+
+  <!-- ============ FORGOT PASSWORD ============ -->
+  <section id="view-forgot" class="view">
+    <div class="login-wrap">
+      <div class="login-brand">
+        <div class="brand-mark">SK</div>
+        <h1>Lupa password</h1>
+        <p class="muted">Link reset akan dikirim ke email kamu</p>
+      </div>
+      <form id="forgot-form" class="card login-card">
+        <label class="field"><span>Email terdaftar</span><input type="email" id="forgot-email" required /></label>
+        <button type="submit" class="btn btn-primary btn-block">Kirim link reset</button>
+      </form>
+      <button type="button" class="btn-link" id="forgot-cancel">Kembali ke login</button>
+    </div>
+  </section>
+
+  <!-- ============ APP SHELL ============ -->
+  <section id="view-app" class="view">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-mark small">SK</div>
+        <button class="outlet-chip" id="outlet-chip">
+          <span id="outlet-name">Toko Berkah</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+      <div class="header-right">
+        <button class="icon-btn" id="sync-indicator" title="Status sinkronisasi">
+          <span class="sync-dot" data-status="synced"></span>
+        </button>
+        <button class="icon-btn" id="printer-indicator" title="Printer Bluetooth">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        </button>
+        <button class="icon-btn" id="notif-btn" title="Notifikasi">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span class="badge-dot" id="notif-dot"></span>
+        </button>
+        <button class="icon-btn" id="theme-btn" title="Ganti tema">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        </button>
+        <button class="icon-btn" id="logout-btn" title="Keluar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="offline-banner" class="offline-banner" hidden>
+      <span class="sync-dot" data-status="pending"></span>
+      <span id="offline-text">Mode offline</span>
+      <button class="btn-link" id="sync-now-inline">Sync sekarang</button>
+    </div>
+
+    <main id="main" class="app-main"></main>
+    <nav class="bottom-nav" id="bottom-nav"></nav>
+  </section>
+
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-handle"></div>
+    <div id="sheet-content"></div>
+  </div>
+
+  <div id="toast-host" class="toast-host"></div>
+  <div id="modal-host"></div>
+  <div id="receipt-host"></div>
+
+  <script src="app.js"></script>
 </body>
 </html>
