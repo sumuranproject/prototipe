@@ -1,6 +1,5 @@
 /* ============================================================
-   SakuKasir — app.js (LENGKAP)
-   Copy-paste SELURUHNYA. Timpa file lama.
+   SakuKasir — app.js (FULL)
    ============================================================ */
 
 const state = {
@@ -263,15 +262,18 @@ function enterApp() {
   renderSidebar();
 }
 
-$('#logout-btn').onclick = () => {
+function handleLogout() {
   if (state.activeShift) {
-    confirmModal('Shift masih aktif',
+    confirmModal(
+      'Shift masih aktif',
       'Tutup shift dulu sebelum keluar. Kalau tetap keluar, shift akan tercatat sebagai anomali.',
-      'Tetap keluar', doLogout);
+      'Tetap keluar',
+      doLogout
+    );
   } else {
     confirmModal('Keluar dari SakuKasir?', 'Kamu perlu login lagi untuk masuk.', 'Keluar', doLogout, false);
   }
-};
+}
 
 function doLogout() {
   state.user = null;
@@ -844,7 +846,7 @@ function renderDashboard(main) {
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
-/* SIDEBAR KELOLA */
+/* SIDEBAR — Accordion */
 function renderSidebar() {
   const body = $('#sidebar-body');
   if (!body) return;
@@ -853,16 +855,16 @@ function renderSidebar() {
   const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
 
   const groups = [
-    { title: 'Katalog', items: [
+    { id: 'katalog', title: 'Katalog', items: [
       { label: 'Produk', route: 'products', count: state.products.length },
       { label: 'Kategori', route: 'categories', count: state.categories.length },
       { label: 'Stok', route: 'inventory', badge: stockBadge },
     ]},
-    { title: 'Bisnis', items: [
+    { id: 'bisnis', title: 'Bisnis', items: [
       { label: 'Outlet', route: 'outlets', count: state.outlets.length },
       { label: 'Kasir', route: 'workers', count: state.workers.length },
     ]},
-    { title: 'Pengaturan', items: [
+    { id: 'pengaturan', title: 'Pengaturan', items: [
       { label: 'QRIS', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
       { label: 'Printer', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
       { label: 'Struk', route: 'receipt' },
@@ -875,30 +877,65 @@ function renderSidebar() {
   ];
 
   body.innerHTML = groups.map(g => `
-    <div class="sidebar-group-title">${g.title}</div>
-    ${g.items.map(it => `
-      <button class="sidebar-item" data-route="${it.route}">
-        <span class="si-label">${it.label}</span>
-        ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
-        ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+    <div class="sidebar-accordion open" data-acc="${g.id}">
+      <button class="sidebar-accordion-header" type="button">
+        <span>${g.title}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
-    `).join('')}
+      <div class="sidebar-accordion-body">
+        ${g.items.map(it => `
+          <button class="sidebar-item" data-route="${it.route}">
+            <span class="si-label">${it.label}</span>
+            ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
+            ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+          </button>
+        `).join('')}
+      </div>
+    </div>
   `).join('');
 
+  body.querySelectorAll('.sidebar-accordion-header').forEach(h => {
+    h.onclick = () => h.parentElement.classList.toggle('open');
+  });
+
   body.querySelectorAll('[data-route]').forEach(el => {
-    el.onclick = () => { closeSidebar(); routeManage(el.dataset.route); };
+    el.onclick = () => {
+      closeSidebar();
+      routeManage(el.dataset.route);
+    };
   });
 }
+
+let _sidebarScrollY = 0;
 
 function openSidebar() {
   if (!state.user || state.user.role !== 'owner') return;
   renderSidebar();
+
+  _sidebarScrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${_sidebarScrollY}px`;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.classList.add('sidebar-open');
+
   $('#sidebar').hidden = false;
   $('#sidebar-backdrop').hidden = false;
 }
+
 function closeSidebar() {
+  const wasOpen = !$('#sidebar').hidden;
+
   $('#sidebar').hidden = true;
   $('#sidebar-backdrop').hidden = true;
+
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.classList.remove('sidebar-open');
+
+  if (wasOpen) window.scrollTo(0, _sidebarScrollY);
 }
 
 $('#brand-mark').addEventListener('click', openSidebar);
@@ -907,6 +944,7 @@ $('#brand-mark').addEventListener('keydown', e => {
 });
 $('#sidebar-close').addEventListener('click', closeSidebar);
 $('#sidebar-backdrop').addEventListener('click', closeSidebar);
+$('#sidebar-logout').addEventListener('click', () => { closeSidebar(); handleLogout(); });
 
 function routeManage(route) {
   if (route === 'products') return pageProducts();
@@ -1579,7 +1617,7 @@ function pageProfile() {
     </div>
   `;
   $('#back-home').onclick = backHome;
-  $('#p-logout').onclick = () => $('#logout-btn').click();
+  $('#p-logout').onclick = handleLogout;
 }
 
 /* ABOUT */
