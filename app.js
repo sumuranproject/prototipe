@@ -1,8 +1,24 @@
 /* ============================================================
-   SakuKasir — app.js (FULL)
-   Fitur: Auth, Permission kasir, POS, Void, Refund, Shift,
-          Dashboard, Laporan, Sidebar accordion, dll.
+   SakuKasir — app.js (FULL - Part 1/2)
+   State, Helper, Auth, Nav, POS, Checkout, QRIS Proof
    ============================================================ */
+
+// ============================================================
+// PERMISSIONS
+// ============================================================
+const PERMISSIONS = [
+  { id: 'pos',          label: 'POS',                desc: 'Buat transaksi penjualan' },
+  { id: 'dashboard',    label: 'Dashboard',          desc: 'Ringkasan penjualan kasir' },
+  { id: 'transactions', label: 'Transaksi',          desc: 'Lihat riwayat transaksi sendiri' },
+  { id: 'shift',        label: 'Shift',              desc: 'Mulai & tutup shift' },
+  { id: 'expense',      label: 'Pengeluaran',        desc: 'Catat & kelola pengeluaran' },
+  { id: 'void',         label: 'Void Transaksi',     desc: 'Batalkan transaksi sendiri' },
+  { id: 'refund',       label: 'Refund Transaksi',   desc: 'Refund transaksi sendiri' },
+  { id: 'printer',      label: 'Printer',            desc: 'Setup & cetak struk Bluetooth' },
+  { id: 'sync',         label: 'Sinkronisasi',       desc: 'Status & manual sync' },
+  { id: 'theme',        label: 'Ganti Tema',         desc: 'Terang / gelap' },
+  { id: 'profile',      label: 'Profil',             desc: 'Lihat info akun sendiri' },
+];
 
 // ============================================================
 // STATE
@@ -22,14 +38,15 @@ const state = {
   shiftHistory: [
     { id: 'SH-041', start: '08:15', end: '16:30', opening: 200000, closing: 1085000, expected: 1085000, variance: 0, cash: 850000, qris: 420000, tx: 24 }
   ],
+  auditLog: [],
   activeView: 'pos',
   ownerTab: 'dashboard',
   transactions: [
-    { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000, status: 'completed' },
-    { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
-    { id: 'TRX-20261006-0040', time: '13:48', date: '2026-10-06', items: [{ name: 'Nasi Goreng', qty: 3, price: 25000 }], total: 97000, method: 'cash', sync: 'pending', cashier: 'Andi', outlet: 'Toko Berkah', discount: 2000, tax: 0, received: 100000, change: 3000, status: 'completed' },
-    { id: 'TRX-20261006-0039', time: '13:12', date: '2026-10-06', items: [{ name: 'Roti Bakar', qty: 2, price: 15000 }], total: 33000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 17000, status: 'completed' },
-    { id: 'TRX-20261006-0038', time: '12:55', date: '2026-10-06', items: [{ name: 'Es Krim', qty: 4, price: 10000 }], total: 62000, method: 'qris', sync: 'error', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
+    { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', createdAt: Date.now() - 3600000, items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000, status: 'completed' },
+    { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', createdAt: Date.now() - 5000000, items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
+    { id: 'TRX-20261006-0040', time: '13:48', date: '2026-10-06', createdAt: Date.now() - 7000000, items: [{ name: 'Nasi Goreng', qty: 3, price: 25000 }], total: 97000, method: 'cash', sync: 'pending', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 2000, tax: 0, received: 100000, change: 3000, status: 'completed' },
+    { id: 'TRX-20261006-0039', time: '13:12', date: '2026-10-06', createdAt: Date.now() - 9000000, items: [{ name: 'Roti Bakar', qty: 2, price: 15000 }], total: 33000, method: 'cash', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 17000, status: 'completed' },
+    { id: 'TRX-20261006-0038', time: '12:55', date: '2026-10-06', createdAt: Date.now() - 11000000, items: [{ name: 'Es Krim', qty: 4, price: 10000 }], total: 62000, method: 'qris', sync: 'error', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
   ],
   expenses: [
     { id: 'EXP-001', amount: 150000, category: 'Bahan', note: 'Beli kopi 2kg', date: '2026-10-06 08:00', by: 'Budi' },
@@ -54,7 +71,7 @@ const state = {
   ],
   workers: [
     { id: 1, username: 'kasir', displayName: 'Andi Wijaya', outlet: 'Toko Berkah', whatsapp: '0812-5555-6666', active: true,
-      permissions: ['pos','dashboard','transactions','shift','printer','sync','theme','profile'] },
+      permissions: ['pos','dashboard','transactions','shift','expense','void','refund','printer','sync','theme','profile'] },
     { id: 2, username: 'kasir2', displayName: 'Siti Aminah', outlet: 'Cabang Pasar', whatsapp: '0812-7777-8888', active: true,
       permissions: ['pos','transactions','shift','printer','sync','theme','profile'] },
     { id: 3, username: 'kasir3', displayName: 'Rudi Hartono', outlet: 'Toko Berkah', whatsapp: '', active: false,
@@ -66,7 +83,7 @@ const state = {
     { id: 3, type: 'system', title: 'Sinkronisasi berhasil', body: '3 transaksi tersinkron', time: '12:30', read: true },
   ],
   settings: {
-    qris: { image: null, active: true, outlet: 'Toko Berkah' },
+    qris: { image: null, active: true, outlet: 'Toko Berkah', retentionDays: 35 },
     printer: { connected: false, device: 'SK-Printer-58mm' },
     receipt: {
       bizName: 'Toko Berkah',
@@ -75,22 +92,21 @@ const state = {
       footer: 'Terima kasih sudah berbelanja',
     },
     notifications: { lowStock: true, outOfStock: true, system: true },
+    security: {
+      voidWindowMinutes: 5,
+      voidLimitCashier: 50000,
+      refundLimitCashier: 50000,
+      ownerPin: '1234',
+      alertVoidPerDay: 5,
+    },
   },
 };
 
 // ============================================================
-// PERMISSIONS
+// HELPERS
 // ============================================================
-const PERMISSIONS = [
-  { id: 'pos',          label: 'POS',             desc: 'Buat transaksi penjualan' },
-  { id: 'dashboard',    label: 'Dashboard',       desc: 'Ringkasan penjualan kasir' },
-  { id: 'transactions', label: 'Transaksi',       desc: 'Lihat riwayat transaksi sendiri' },
-  { id: 'shift',        label: 'Shift',           desc: 'Mulai & tutup shift' },
-  { id: 'printer',      label: 'Printer',         desc: 'Setup & cetak struk Bluetooth' },
-  { id: 'sync',         label: 'Sinkronisasi',    desc: 'Status & manual sync' },
-  { id: 'theme',        label: 'Ganti Tema',      desc: 'Terang / gelap' },
-  { id: 'profile',      label: 'Profil',          desc: 'Lihat info akun sendiri' },
-];
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
 
 function hasPerm(id) {
   if (!state.user) return false;
@@ -98,12 +114,6 @@ function hasPerm(id) {
   const p = state.user.permissions;
   return Array.isArray(p) ? p.includes(id) : true;
 }
-
-// ============================================================
-// HELPERS
-// ============================================================
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => document.querySelectorAll(s);
 
 function rupiah(n) {
   const num = Math.round(n);
@@ -125,6 +135,21 @@ function nowDateTime() {
   return new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+function formatTimestamp(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  return d.toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function isWithinVoidWindow(tx) {
+  if (!tx.createdAt) return true;
+  const minutes = state.settings.security.voidWindowMinutes;
+  const age = (Date.now() - tx.createdAt) / 60000;
+  return age <= minutes;
+}
+function txAgeMinutes(tx) {
+  if (!tx.createdAt) return 0;
+  return Math.floor((Date.now() - tx.createdAt) / 60000);
+}
 
 function toast(msg, type = '') {
   const host = $('#toast-host');
@@ -187,12 +212,134 @@ function promptModal(title, label, def, onConfirm) {
   setTimeout(() => $('#prompt-value')?.focus(), 50);
 }
 
+function pinModal(title, hint, onConfirm) {
+  const host = $('#modal-host');
+  host.innerHTML = `
+    <div class="modal-backdrop" id="modal-bd">
+      <div class="modal">
+        <h3>${title}</h3>
+        <p>${hint || 'Masukkan PIN owner 4 digit.'}</p>
+        <div class="pin-input">
+          <input type="password" inputmode="numeric" maxlength="1" data-pin="0" autofocus />
+          <input type="password" inputmode="numeric" maxlength="1" data-pin="1" />
+          <input type="password" inputmode="numeric" maxlength="1" data-pin="2" />
+          <input type="password" inputmode="numeric" maxlength="1" data-pin="3" />
+        </div>
+        <div id="pin-error" class="form-error" hidden></div>
+        <div class="modal-actions" style="margin-top:12px">
+          <button class="btn btn-ghost" id="pin-cancel">Batal</button>
+          <button class="btn btn-primary" id="pin-ok">Konfirmasi</button>
+        </div>
+      </div>
+    </div>`;
+  const close = () => host.innerHTML = '';
+  const inputs = $$('.pin-input input');
+  inputs.forEach((inp, i) => {
+    inp.oninput = (e) => {
+      if (e.target.value && i < inputs.length - 1) inputs[i + 1].focus();
+    };
+    inp.onkeydown = (e) => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) inputs[i - 1].focus();
+    };
+  });
+  const getPin = () => Array.from(inputs).map(i => i.value).join('');
+  const check = () => {
+    const pin = getPin();
+    if (pin.length < 4) {
+      $('#pin-error').textContent = 'PIN harus 4 digit';
+      $('#pin-error').hidden = false;
+      return;
+    }
+    if (pin !== state.settings.security.ownerPin) {
+      $('#pin-error').textContent = 'PIN salah.';
+      $('#pin-error').hidden = false;
+      inputs.forEach(i => i.value = '');
+      inputs[0].focus();
+      return;
+    }
+    close();
+    onConfirm();
+  };
+  $('#pin-cancel').onclick = close;
+  $('#pin-ok').onclick = check;
+  inputs[3].onkeydown = (e) => { if (e.key === 'Enter') check(); };
+  setTimeout(() => inputs[0].focus(), 100);
+}
+
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('sk-theme', t);
   state.theme = t;
 }
 applyTheme(state.theme);
+
+function pushAudit(type, data) {
+  const entry = {
+    id: uid('AUD'),
+    type,
+    at: Date.now(),
+    by: state.user ? state.user.username : 'system',
+    byName: state.user ? state.user.displayName : 'System',
+    device: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
+    ...data,
+  };
+  state.auditLog.unshift(entry);
+  return entry;
+}
+
+function pushNotif(type, title, body) {
+  state.notifications.unshift({
+    id: Date.now(),
+    type,
+    title,
+    body,
+    time: nowTime(),
+    read: false,
+  });
+  $('#notif-dot').style.display = '';
+  state.notifUnread = true;
+}
+
+function imageViewer(src) {
+  const host = document.createElement('div');
+  host.className = 'image-viewer-bd';
+  host.innerHTML = `
+    <button class="close-x" title="Tutup">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+    <img src="${src}" />
+  `;
+  document.body.appendChild(host);
+  const close = () => host.remove();
+  host.onclick = (e) => { if (e.target === host || e.target.closest('.close-x')) close(); };
+}
+
+// QRIS PROOF: simulasi + placeholder untuk kamera
+function captureQrisProof(callback) {
+  // PROTOTIPE: pakai <input type="file"> untuk simulasi
+  // Di Android nanti pakai CameraX TakePicture()
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const capturedAt = Date.now();  // ← timestamp dari app setelah jepret
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      callback({
+        dataUrl,
+        capturedAt,
+        deviceModel: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
+        fileSize: Math.round(dataUrl.length * 0.75),  // approximate
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
 
 // ============================================================
 // AUTH
@@ -270,7 +417,6 @@ $('#login-form').addEventListener('submit', (e) => {
     if (user === 'owner') {
       state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner' };
     } else {
-      // Cari worker by username
       const w = state.workers.find(x => x.username === user);
       if (!w) {
         errEl.textContent = 'Username atau password salah.';
@@ -335,7 +481,7 @@ function doLogout() {
 }
 
 // ============================================================
-// NAV (role + permission aware)
+// NAV
 // ============================================================
 function renderNav() {
   const nav = $('#bottom-nav');
@@ -586,14 +732,19 @@ function openCartSheet() {
 }
 
 // ============================================================
-// CHECKOUT
+// CHECKOUT + QRIS PROOF
 // ============================================================
 function openCheckout() {
   let method = 'cash', discount = 0, taxPct = 0, cashReceived = 0;
+  let qrisProof = null;  // { dataUrl, capturedAt, deviceModel, fileSize }
+
   const render = () => {
     const t = calculateTotals(state.cart, discount, taxPct);
     const change = cashReceived - t.total;
-    const canPay = method === 'cash' ? cashReceived >= t.total : true;
+    const canPay = method === 'cash'
+      ? cashReceived >= t.total
+      : (qrisProof !== null);  // QRIS WAJIB ada bukti
+
     openSheet(`
       <h3 style="font-size:17px;margin-bottom:12px">Pembayaran</h3>
       <div style="text-align:center;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:16px">
@@ -623,9 +774,29 @@ function openCheckout() {
           <span style="color:${change >= 0 ? 'var(--cash)' : 'var(--text-muted)'};font-weight:700">${change >= 0 ? rupiah(change) : '—'}</span>
         </div>
       ` : `
-        <div style="text-align:center;padding:20px;border:1px dashed var(--border-strong);border-radius:var(--radius);margin-bottom:16px">
-          <div style="width:160px;height:160px;background:var(--surface-alt);border-radius:var(--radius);display:inline-flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:12px;font-weight:600">QRIS ${state.settings.qris.active ? '· Aktif' : '· Belum diatur'}</div>
-          <p class="muted small" style="margin:12px 0 0">Scan pakai aplikasi bank atau e-wallet</p>
+        <div class="qris-proof-section">
+          ${qrisProof ? `
+            <div class="qris-proof-preview">
+              <img src="${qrisProof.dataUrl}" alt="Bukti QRIS" id="qris-preview-img" />
+            </div>
+            <div class="qris-proof-meta">
+              <span>${Math.round(qrisProof.fileSize / 1024)} KB</span>
+              <span>${formatTimestamp(qrisProof.capturedAt)}</span>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn btn-ghost" id="qris-retake" style="flex:1">Foto ulang</button>
+            </div>
+          ` : `
+            <div class="qris-proof-empty">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              <div style="font-weight:500;color:var(--text);margin-top:4px">Belum ada bukti QRIS</div>
+              <div class="muted small">Bukti WAJIB dari kamera, tidak bisa dari galeri</div>
+              <button class="btn btn-primary" id="qris-capture" style="margin-top:12px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Ambil Foto Bukti
+              </button>
+            </div>
+          `}
         </div>
       `}
       <div class="summary-row"><span>Subtotal</span><span>${rupiah(t.subtotal)}</span></div>
@@ -633,9 +804,12 @@ function openCheckout() {
       ${t.tax > 0 ? `<div class="summary-row"><span>Pajak ${taxPct}%</span><span>${rupiah(t.tax)}</span></div>` : ''}
       <div class="summary-row total"><span>Total</span><span>${rupiah(t.total)}</span></div>
       <div style="display:grid;gap:8px;margin-top:16px">
-        <button class="btn btn-primary btn-block" id="pay-btn" ${canPay ? '' : 'disabled'}>Bayar ${rupiah(t.total)}</button>
+        <button class="btn btn-primary btn-block" id="pay-btn" ${canPay ? '' : 'disabled'}>
+          ${method === 'qris' && !qrisProof ? 'Ambil bukti QRIS dulu' : 'Bayar ' + rupiah(t.total)}
+        </button>
       </div>
     `);
+
     $('#in-disc').oninput = e => { discount = Math.max(0, parseInt(e.target.value) || 0); render(); };
     $('#in-tax').oninput = e => { taxPct = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)); render(); };
     if ($('#in-cash')) {
@@ -644,21 +818,51 @@ function openCheckout() {
     }
     $('#m-cash').onclick = () => { method = 'cash'; render(); };
     $('#m-qris').onclick = () => { method = 'qris'; render(); };
+
+    // QRIS proof handlers
+    if ($('#qris-capture')) {
+      $('#qris-capture').onclick = () => {
+        captureQrisProof((proof) => {
+          qrisProof = proof;
+          render();
+          toast('Bukti QRIS tersimpan', 'success');
+        });
+      };
+    }
+    if ($('#qris-retake')) {
+      $('#qris-retake').onclick = () => {
+        qrisProof = null;
+        render();
+      };
+    }
+    if ($('#qris-preview-img')) {
+      $('#qris-preview-img').onclick = () => imageViewer(qrisProof.dataUrl);
+    }
+
     if (canPay) {
       $('#pay-btn').onclick = () => {
         const t = calculateTotals(state.cart, discount, taxPct);
         const tx = {
           id: 'TRX-' + todayStr().replace(/-/g, '') + '-' + String(state.transactions.length + 1).padStart(4, '0'),
           time: nowTime(), date: todayStr(),
+          createdAt: Date.now(),
           items: state.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
           total: t.total, method,
           sync: state.online ? 'synced' : 'pending',
           cashier: state.user.displayName.split(' ')[0],
+          cashierId: state.user.username,
           outlet: state.user.role === 'cashier' ? state.user.outlet : state.outlet.name,
           discount: t.discount, tax: t.tax, taxPct: t.taxPct,
           received: method === 'cash' ? cashReceived : null,
           change: method === 'cash' ? cashReceived - t.total : 0,
           status: 'completed',
+          qrisProof: method === 'qris' && qrisProof ? {
+            dataUrl: qrisProof.dataUrl,
+            capturedAt: qrisProof.capturedAt,
+            deviceModel: qrisProof.deviceModel,
+            fileSize: qrisProof.fileSize,
+            expiredAt: qrisProof.capturedAt + (state.settings.qris.retentionDays * 86400000),
+          } : null,
         };
         state.transactions.unshift(tx);
         if (!state.online) state.syncQueue.push({ type: 'transaction', id: tx.id });
@@ -718,7 +922,7 @@ function renderTransactions(main) {
   const isOwner = state.user.role === 'owner';
   const list = isOwner
     ? state.transactions
-    : state.transactions.filter(t => t.cashier === state.user.displayName.split(' ')[0]);
+    : state.transactions.filter(t => t.cashierId === state.user.username);
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Transaksi</h2><div class="sub">${list.length} transaksi</div></div>
@@ -773,25 +977,48 @@ function showTxDetail(id) {
   if (!tx) return;
   const isOwner = state.user.role === 'owner';
   const isToday = tx.date === todayStr();
-  const canVoid = isOwner && tx.status === 'completed' && isToday;
-  const canRefund = isOwner && (tx.status === 'completed' || tx.status === 'partial_refund');
+  const isMyTx = tx.cashierId === state.user.username;
+
+  // Void: owner bebas, kasir cuma transaksi sendiri + permission
+  const canVoidBase = tx.status === 'completed' && isToday;
+  const canVoid = canVoidBase && (isOwner || (isMyTx && hasPerm('void')));
+  const canRefund = (tx.status === 'completed' || tx.status === 'partial_refund') &&
+    (isOwner || (isMyTx && hasPerm('refund')));
 
   let statusBanner = '';
   if (tx.status === 'void') {
     statusBanner = `<div class="status-banner void">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
-      <div><strong>VOID</strong>${tx.voidReason || ''} · ${tx.voidedAt || ''}</div>
+      <div><strong>VOID</strong>${tx.voidReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.voidedByName || '-'} · ${tx.voidedAt || ''}</span></div>
     </div>`;
   } else if (tx.status === 'refunded') {
     statusBanner = `<div class="status-banner refund">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
-      <div><strong>REFUND PENUH</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod} · ${tx.refundReason || ''} · ${tx.refundedAt || ''}</div>
+      <div><strong>REFUND PENUH</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
     </div>`;
   } else if (tx.status === 'partial_refund') {
     statusBanner = `<div class="status-banner refund">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
-      <div><strong>REFUND SEBAGIAN</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod} · ${tx.refundReason || ''} · ${tx.refundedAt || ''}</div>
+      <div><strong>REFUND SEBAGIAN</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
     </div>`;
+  }
+
+  // QRIS Proof section
+  let proofHtml = '';
+  if (tx.method === 'qris') {
+    if (tx.qrisProof && tx.qrisProof.dataUrl) {
+      const isExpired = tx.qrisProof.expiredAt && Date.now() > tx.qrisProof.expiredAt;
+      if (isExpired) {
+        proofHtml = `<div class="proof-viewer"><div class="proof-expired">⚠ Bukti QRIS kadaluarsa<br><span class="small">Retensi ${state.settings.qris.retentionDays} hari</span></div></div>`;
+      } else {
+        proofHtml = `<div class="proof-viewer">
+          <div class="muted small" style="margin-bottom:6px">Bukti QRIS · ${formatTimestamp(tx.qrisProof.capturedAt)}</div>
+          <img src="${tx.qrisProof.dataUrl}" id="tx-proof-img" />
+        </div>`;
+      }
+    } else {
+      proofHtml = `<div class="proof-viewer"><div class="proof-expired">Tidak ada bukti QRIS</div></div>`;
+    }
   }
 
   openSheet(`
@@ -802,7 +1029,9 @@ function showTxDetail(id) {
       <div class="shift-row"><span class="lbl">Kasir</span><span class="val">${tx.cashier}</span></div>
       <div class="shift-row"><span class="lbl">Metode</span><span class="val">${tx.method === 'cash' ? 'Cash' : 'QRIS'}</span></div>
       <div class="shift-row"><span class="lbl">Status sync</span><span class="val"><span class="sync-badge ${tx.sync}">${tx.sync}</span></span></div>
+      ${tx.createdAt ? `<div class="shift-row"><span class="lbl">Umur</span><span class="val">${txAgeMinutes(tx)} menit lalu</span></div>` : ''}
     </div>
+    ${proofHtml}
     <div class="section-title">Item</div>
     <div class="cart-list" style="padding:0">
       ${tx.items.map(i => `
@@ -831,16 +1060,53 @@ function showTxDetail(id) {
     if (state.settings.printer.connected) { toast('Mencetak ulang…'); printReceipt(tx); }
     else toast('Printer belum terhubung', 'error');
   };
+  if ($('#tx-proof-img')) $('#tx-proof-img').onclick = () => imageViewer(tx.qrisProof.dataUrl);
   if (canVoid && $('#void-btn')) $('#void-btn').onclick = () => openVoidSheet(tx);
   if (canRefund && $('#refund-btn')) $('#refund-btn').onclick = () => openRefundSheet(tx);
 }
 
 // ============================================================
-// VOID
+// VOID (dengan window + limit + PIN)
 // ============================================================
 function openVoidSheet(tx) {
   const REASONS = ['Salah input', 'Customer batal', 'Double entry', 'Lainnya'];
+  const isOwner = state.user.role === 'owner';
+  const sec = state.settings.security;
+  const withinWindow = isWithinVoidWindow(tx);
+  const exceedsLimit = tx.total > sec.voidLimitCashier;
+
+  // Kalau kasir: cek window & limit dulu
+  if (!isOwner) {
+    if (!withinWindow) {
+      return confirmModal(
+        'Void tidak bisa',
+        `Window void kasir hanya ${sec.voidWindowMinutes} menit pertama. Transaksi ini sudah ${txAgeMinutes(tx)} menit. Hubungi owner.`,
+        'OK', () => {}, false
+      );
+    }
+  }
+
   let reason = REASONS[0];
+
+  const proceedVoid = (finalReason) => {
+    tx.status = 'void';
+    tx.voidReason = finalReason;
+    tx.voidedAt = nowDateTime();
+    tx.voidedBy = state.user.username;
+    tx.voidedByName = state.user.displayName;
+    pushAudit('void', {
+      trxId: tx.id,
+      amount: tx.total,
+      reason: finalReason,
+      outlet: tx.outlet,
+      cashier: tx.cashier,
+    });
+    pushNotif('void', 'Void transaksi',
+      `${tx.id} · ${rupiah(tx.total)} · oleh ${state.user.displayName}`);
+    closeSheet();
+    toast('Transaksi di-void', 'success');
+    renderMain();
+  };
 
   const render = () => {
     openSheet(`
@@ -850,6 +1116,11 @@ function openVoidSheet(tx) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
         <div>Void tidak menghapus transaksi dari riwayat. Transaksi akan ditandai VOID dan tidak dihitung di penjualan.</div>
       </div>
+      ${!isOwner && exceedsLimit ? `
+        <div class="status-banner void" style="background:var(--warn-soft);color:var(--warn)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+          <div>Nominal transaksi (${rupiah(tx.total)}) melebihi limit kasir (${rupiah(sec.voidLimitCashier)}). Butuh PIN owner.</div>
+        </div>` : ''}
       <div class="section-title" style="margin-top:0">Alasan void</div>
       <div class="reason-grid" id="void-reasons">
         ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
@@ -872,30 +1143,33 @@ function openVoidSheet(tx) {
         if (!note) return toast('Keterangan wajib diisi', 'error');
         finalReason = note;
       }
-      tx.status = 'void';
-      tx.voidReason = finalReason;
-      tx.voidedAt = nowDateTime();
-      closeSheet();
-      toast('Transaksi di-void', 'success');
-      renderMain();
+      if (!isOwner && exceedsLimit) {
+        // Kasir void nominal besar → butuh PIN owner
+        pinModal('PIN Owner', `Nominal ${rupiah(tx.total)} melebihi limit. Masukkan PIN owner.`, () => {
+          proceedVoid(finalReason + ' [PIN owner]');
+        });
+      } else {
+        proceedVoid(finalReason);
+      }
     };
   };
   render();
 }
 
 // ============================================================
-// REFUND
+// REFUND (partial + limit + PIN)
 // ============================================================
 function openRefundSheet(tx) {
   const REASONS = ['Barang rusak', 'Salah pesan', 'Komplain', 'Lainnya'];
-  // Item yang belum di-refund (kalau partial sebelumnya, exclude yang sudah)
+  const isOwner = state.user.role === 'owner';
+  const sec = state.settings.security;
   const alreadyRefunded = tx.refundedItems || [];
   const refundable = tx.items.map((it, idx) => ({
     idx, name: it.name, qty: it.qty, price: it.price,
     maxQty: it.qty - (alreadyRefunded.find(r => r.idx === idx)?.qty || 0),
   })).filter(it => it.maxQty > 0);
 
-  const checked = new Set(refundable.map(it => it.idx)); // default semua dipilih
+  const checked = new Set(refundable.map(it => it.idx));
   const qtyMap = {};
   refundable.forEach(it => qtyMap[it.idx] = it.maxQty);
 
@@ -909,6 +1183,7 @@ function openRefundSheet(tx) {
     const allChecked = refundable.every(it => checked.has(it.idx));
     const isFull = allChecked && refundable.every(it => qtyMap[it.idx] === it.maxQty);
     const refundLabel = isFull ? 'Refund penuh' : 'Refund sebagian';
+    const exceedsLimit = !isOwner && totalRefund > sec.refundLimitCashier;
 
     openSheet(`
       <h3 style="font-size:17px;margin-bottom:4px">Refund transaksi</h3>
@@ -932,6 +1207,11 @@ function openRefundSheet(tx) {
         <span>Total refund</span>
         <span style="color:var(--warn)">${rupiah(totalRefund)}</span>
       </div>
+      ${exceedsLimit ? `
+        <div class="status-banner refund" style="margin-top:12px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+          <div>Nominal refund (${rupiah(totalRefund)}) melebihi limit kasir (${rupiah(sec.refundLimitCashier)}). Butuh PIN owner.</div>
+        </div>` : ''}
       <div class="section-title">Metode refund</div>
       <div class="form-row" style="margin-bottom:12px">
         <button class="btn ${method === 'cash' ? 'btn-primary' : 'btn-ghost'}" id="rf-cash">Cash</button>
@@ -974,38 +1254,53 @@ function openRefundSheet(tx) {
           if (!note) return toast('Keterangan wajib diisi', 'error');
           finalReason = note;
         }
-        const selectedItems = refundable
-          .filter(it => checked.has(it.idx))
-          .map(it => ({ idx: it.idx, name: it.name, qty: qtyMap[it.idx], amount: it.price * qtyMap[it.idx] }));
-
-        const prevRefund = tx.refundAmount || 0;
-        const newRefund = prevRefund + totalRefund;
-        const prevItems = tx.refundedItems || [];
-
-        // Merge items
-        const merged = [...prevItems];
-        selectedItems.forEach(si => {
-          const existing = merged.find(m => m.idx === si.idx);
-          if (existing) existing.qty += si.qty;
-          else merged.push(si);
-        });
-
-        tx.refundedItems = merged;
-        tx.refundAmount = newRefund;
-        tx.refundMethod = method;
-        tx.refundReason = finalReason;
-        tx.refundedAt = nowDateTime();
-
-        // Full refund kalau semua item sudah habis di-refund
-        const allRefunded = tx.items.every((it, idx) => {
-          const r = merged.find(m => m.idx === idx);
-          return r && r.qty >= it.qty;
-        });
-        tx.status = allRefunded ? 'refunded' : 'partial_refund';
-
-        closeSheet();
-        toast(allRefunded ? 'Refund penuh berhasil' : 'Refund sebagian berhasil', 'success');
-        renderMain();
+        const doRefund = () => {
+          const selectedItems = refundable
+            .filter(it => checked.has(it.idx))
+            .map(it => ({ idx: it.idx, name: it.name, qty: qtyMap[it.idx], amount: it.price * qtyMap[it.idx] }));
+          const prevRefund = tx.refundAmount || 0;
+          const newRefund = prevRefund + totalRefund;
+          const prevItems = tx.refundedItems || [];
+          const merged = [...prevItems];
+          selectedItems.forEach(si => {
+            const existing = merged.find(m => m.idx === si.idx);
+            if (existing) existing.qty += si.qty;
+            else merged.push(si);
+          });
+          tx.refundedItems = merged;
+          tx.refundAmount = newRefund;
+          tx.refundMethod = method;
+          tx.refundReason = finalReason;
+          tx.refundedAt = nowDateTime();
+          tx.refundedBy = state.user.username;
+          tx.refundedByName = state.user.displayName;
+          const allRefunded = tx.items.every((it, idx) => {
+            const r = merged.find(m => m.idx === idx);
+            return r && r.qty >= it.qty;
+          });
+          tx.status = allRefunded ? 'refunded' : 'partial_refund';
+          pushAudit('refund', {
+            trxId: tx.id,
+            amount: totalRefund,
+            method,
+            reason: finalReason,
+            isFull: allRefunded,
+            outlet: tx.outlet,
+            cashier: tx.cashier,
+          });
+          pushNotif('refund', 'Refund transaksi',
+            `${tx.id} · ${rupiah(totalRefund)} · ${allRefunded ? 'Penuh' : 'Sebagian'}`);
+          closeSheet();
+          toast(allRefunded ? 'Refund penuh berhasil' : 'Refund sebagian berhasil', 'success');
+          renderMain();
+        };
+        if (exceedsLimit) {
+          pinModal('PIN Owner', `Nominal refund ${rupiah(totalRefund)} melebihi limit. Masukkan PIN owner.`, () => {
+            doRefund();
+          });
+        } else {
+          doRefund();
+        }
       };
     }
   };
@@ -1095,19 +1390,16 @@ function renderShift(main) {
 }
 
 // ============================================================
-// DASHBOARD
+// DASHBOARD (owner: rekap + alert kasir nakal)
 // ============================================================
 function renderDashboard(main) {
   const today = todayStr();
   const todayTx = state.transactions.filter(t => t.date === today);
-  const active = todayTx.filter(t => t.status === 'completed' || t.status === 'partial_refund');
+  const active = todayTx.filter(t => t.status !== 'void');
   const voided = todayTx.filter(t => t.status === 'void');
   const refunded = todayTx.filter(t => t.status === 'refunded' || t.status === 'partial_refund');
 
-  const totalSales = active.reduce((s, t) => {
-    const refundPart = t.refundAmount || 0;
-    return s + (t.total - refundPart);
-  }, 0);
+  const totalSales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const expense = state.expenses.filter(e => e.date.startsWith(today)).reduce((s, e) => s + e.amount, 0);
@@ -1146,11 +1438,36 @@ function renderDashboard(main) {
     return;
   }
 
+  // Rekap kasir hari ini
+  const cashierRecap = {};
+  todayTx.forEach(t => {
+    const key = t.cashier;
+    if (!cashierRecap[key]) cashierRecap[key] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
+    if (t.status === 'void') { cashierRecap[key].voidCount++; cashierRecap[key].voidAmount += t.total; }
+    if (t.status === 'refunded' || t.status === 'partial_refund') {
+      cashierRecap[key].refundCount++;
+      cashierRecap[key].refundAmount += (t.refundAmount || 0);
+    }
+  });
+
+  // Alert kalau ada kasir void > threshold
+  const threshold = state.settings.security.alertVoidPerDay;
+  const alerts = Object.entries(cashierRecap).filter(([_, r]) => r.voidCount >= threshold);
+  const alertHtml = alerts.map(([name, r]) => `
+    <div class="alert-card">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+      <div>
+        <div class="ac-title">Alert: ${name} void ${r.voidCount}× hari ini</div>
+        <div class="ac-body">Total ${rupiah(r.voidAmount)}. Melebihi ambang batas ${threshold}×/hari.</div>
+      </div>
+    </div>`).join('');
+
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
         <div class="sub">Ringkasan hari ini</div></div>
     </div>
+    ${alertHtml}
     <div class="kpi-hero">
       <div class="label">Penjualan hari ini</div>
       <div class="amount">${rupiah(totalSales)}</div>
@@ -1166,6 +1483,23 @@ function renderDashboard(main) {
       <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
       <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount">${rupiah(net)}</div></div>
     </div>
+
+    ${Object.keys(cashierRecap).length ? `
+      <div class="section-title">Rekap void/refund per kasir</div>
+      <div class="tx-list">
+        ${Object.entries(cashierRecap).map(([name, r]) => `
+          <div class="cashier-recap-row">
+            <div>
+              <div class="cr-name">${name}</div>
+              <div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div>
+            </div>
+            <div class="cr-amount">
+              ${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    ` : ''}
 
     <div class="chart-card">
       <div class="chart-title">7 hari terakhir</div>
@@ -1198,21 +1532,19 @@ function renderDashboard(main) {
 }
 
 // ============================================================
-// SIDEBAR (accordion, role-aware)
+// SIDEBAR (accordion untuk owner, flat untuk kasir)
 // ============================================================
 function renderSidebar() {
   const body = $('#sidebar-body');
   if (!body) return;
-
   const isOwner = state.user.role === 'owner';
-  let groups = [];
 
   if (isOwner) {
     const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
     const outCount = state.products.filter(p => p.track && p.stock === 0).length;
     const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
 
-    groups = [
+    const groups = [
       { id: 'katalog', title: 'Katalog', items: [
         { label: 'Produk', route: 'products', count: state.products.length },
         { label: 'Kategori', route: 'categories', count: state.categories.length },
@@ -1228,54 +1560,60 @@ function renderSidebar() {
         { label: 'Struk', route: 'receipt' },
         { label: 'Notifikasi', route: 'notif-settings' },
         { label: 'Sinkronisasi', route: 'sync-settings', count: state.syncQueue.length || null },
+        { label: 'Keamanan', route: 'security-settings' },
+        { label: 'Audit Log', route: 'audit-log', count: state.auditLog.length || null },
         { label: 'Tema', route: 'theme-settings', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } },
         { label: 'Profil', route: 'profile' },
         { label: 'Tentang', route: 'about' },
       ]},
     ];
-  } else {
-    const akunItems = [];
-    if (hasPerm('profile')) akunItems.push({ label: 'Profil', route: 'cashier-profile' });
 
-    const perangkatItems = [];
-    if (hasPerm('printer')) perangkatItems.push({ label: 'Printer', route: 'cashier-printer' });
-    if (hasPerm('sync'))    perangkatItems.push({ label: 'Sinkronisasi', route: 'cashier-sync', count: state.syncQueue.length || null });
+    body.innerHTML = groups.map(g => `
+      <div class="sidebar-accordion open" data-acc="${g.id}">
+        <button class="sidebar-accordion-header" type="button">
+          <span>${g.title}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="sidebar-accordion-body">
+          ${g.items.map(it => `
+            <button class="sidebar-item" data-route="${it.route}">
+              <span class="si-label">${it.label}</span>
+              ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
+              ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
 
-    const tampilanItems = [];
-    if (hasPerm('theme')) tampilanItems.push({ label: 'Tema', route: 'cashier-theme', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } });
-
-    if (akunItems.length)      groups.push({ id: 'akun',      title: 'Akun',      items: akunItems });
-    if (perangkatItems.length) groups.push({ id: 'perangkat', title: 'Perangkat', items: perangkatItems });
-    if (tampilanItems.length)  groups.push({ id: 'tampilan',  title: 'Tampilan',  items: tampilanItems });
-    groups.push({ id: 'info', title: 'Info', items: [{ label: 'Tentang', route: 'about' }] });
+    body.querySelectorAll('.sidebar-accordion-header').forEach(h => {
+      h.onclick = () => h.parentElement.classList.toggle('open');
+    });
+    body.querySelectorAll('[data-route]').forEach(el => {
+      el.onclick = () => { closeSidebar(); routeManage(el.dataset.route); };
+    });
+    return;
   }
 
-  body.innerHTML = groups.map(g => `
-    <div class="sidebar-accordion open" data-acc="${g.id}">
-      <button class="sidebar-accordion-header" type="button">
-        <span>${g.title}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-      </button>
-      <div class="sidebar-accordion-body">
-        ${g.items.map(it => `
-          <button class="sidebar-item" data-route="${it.route}">
-            <span class="si-label">${it.label}</span>
-            ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
-            ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
-          </button>
-        `).join('')}
-      </div>
-    </div>
+  // KASIR: flat list
+  const items = [];
+  if (hasPerm('profile')) items.push({ label: 'Profil', route: 'cashier-profile' });
+  if (hasPerm('printer')) items.push({ label: 'Printer', route: 'cashier-printer' });
+  if (hasPerm('sync')) items.push({ label: 'Sinkronisasi', route: 'cashier-sync', count: state.syncQueue.length || null });
+  if (hasPerm('expense')) items.push({ label: 'Pengeluaran', route: 'cashier-expenses' });
+  if (hasPerm('theme')) items.push({ label: 'Tema', route: 'cashier-theme', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } });
+  items.push({ label: 'Tentang', route: 'about' });
+
+  body.innerHTML = items.map(it => `
+    <button class="sidebar-item" data-route="${it.route}">
+      <span class="si-label">${it.label}</span>
+      ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
+      ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+    </button>
   `).join('');
 
-  body.querySelectorAll('.sidebar-accordion-header').forEach(h => {
-    h.onclick = () => h.parentElement.classList.toggle('open');
-  });
   body.querySelectorAll('[data-route]').forEach(el => {
-    el.onclick = () => {
-      closeSidebar();
-      routeManage(el.dataset.route);
-    };
+    el.onclick = () => { closeSidebar(); routeManage(el.dataset.route); };
   });
 }
 
@@ -1324,7 +1662,7 @@ $('#sidebar-backdrop').addEventListener('click', closeSidebar);
 $('#sidebar-logout').addEventListener('click', () => { closeSidebar(); handleLogout(); });
 
 // ============================================================
-// ROUTER UNTUK SIDEBAR
+// ROUTER SIDEBAR
 // ============================================================
 function routeManage(route) {
   if (route === 'products') return pageProducts();
@@ -1337,6 +1675,8 @@ function routeManage(route) {
   if (route === 'receipt') return pageReceiptSettings();
   if (route === 'notif-settings') return pageNotifSettings();
   if (route === 'sync-settings') return pageSyncSettings();
+  if (route === 'security-settings') return pageSecuritySettings();
+  if (route === 'audit-log') return pageAuditLog();
   if (route === 'theme-settings') return pageThemeSettings();
   if (route === 'profile') return pageProfile();
   if (route === 'about') return pageAbout();
@@ -1344,6 +1684,7 @@ function routeManage(route) {
   if (route === 'cashier-printer') return pagePrinterSettings();
   if (route === 'cashier-sync') return pageSyncSettings();
   if (route === 'cashier-theme') return pageThemeSettings();
+  if (route === 'cashier-expenses') return pageExpenses();
 }
 
 function backHome() {
@@ -1413,7 +1754,7 @@ function renderProdList() {
     e.stopPropagation();
     const id = parseInt(b.dataset.del);
     const p = state.products.find(x => x.id === id);
-    confirmModal('Hapus produk?', `"${p.name}" akan dihapus permanen. Histori transaksi tetap aman.`, 'Hapus', () => {
+    confirmModal('Hapus produk?', `"${p.name}" akan dihapus permanen.`, 'Hapus', () => {
       state.products = state.products.filter(x => x.id !== id);
       renderProdList();
       toast('Produk dihapus');
@@ -1698,7 +2039,7 @@ function outletForm(id) {
 }
 
 // ============================================================
-// WORKERS (dengan permission toggle)
+// WORKERS
 // ============================================================
 function pageWorkers() {
   const main = $('#main');
@@ -1765,7 +2106,6 @@ function workerForm(id) {
         <div style="font-weight:500">Akun aktif</div>
         <button class="switch ${data.active ? 'on' : ''}" id="w-active"></button>
       </div>
-
       <div class="section-title" style="margin:16px 0 8px">Akses Fitur</div>
       <p class="muted small" style="margin:-6px 0 8px">Pilih fitur yang boleh dipakai kasir ini.</p>
       <div id="w-perms">
@@ -1779,7 +2119,6 @@ function workerForm(id) {
           </div>
         `).join('')}
       </div>
-
       <div class="form-actions">
         <button class="btn btn-ghost" id="w-cancel">Batal</button>
         <button class="btn btn-primary" id="w-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
@@ -1822,7 +2161,7 @@ function workerForm(id) {
 }
 
 // ============================================================
-// QRIS
+// QRIS SETTINGS
 // ============================================================
 function pageQRIS() {
   const main = $('#main');
@@ -1847,6 +2186,15 @@ function pageQRIS() {
           ${state.settings.qris.image ? '<button class="btn btn-danger" id="q-del">Hapus</button>' : ''}
         </div>
       </div>
+      <div class="form-section">
+        <div class="security-info">
+          <b>Retensi bukti QRIS</b><br>
+          Bukti QRIS otomatis dihapus setelah ${state.settings.qris.retentionDays} hari. Data transaksi tetap tersimpan.
+        </div>
+        <label class="field"><span>Retensi (hari)</span>
+          <input type="number" id="q-retention" value="${state.settings.qris.retentionDays}" min="1" max="365" /></label>
+        <button class="btn btn-primary" id="q-save-retention">Simpan retensi</button>
+      </div>
     `;
     $('#back-home').onclick = backHome;
     $('#q-active').onclick = e => {
@@ -1864,12 +2212,18 @@ function pageQRIS() {
         render();
       });
     }
+    $('#q-save-retention').onclick = () => {
+      const v = parseInt($('#q-retention').value) || 35;
+      state.settings.qris.retentionDays = Math.max(1, Math.min(365, v));
+      render();
+      toast('Retensi disimpan', 'success');
+    };
   };
   render();
 }
 
 // ============================================================
-// PRINTER
+// PRINTER SETTINGS
 // ============================================================
 function pagePrinterSettings() {
   const main = $('#main');
@@ -1916,7 +2270,7 @@ function pagePrinterSettings() {
 }
 
 // ============================================================
-// RECEIPT
+// RECEIPT SETTINGS
 // ============================================================
 function pageReceiptSettings() {
   const main = $('#main');
@@ -2031,6 +2385,90 @@ function pageSyncSettings() {
 }
 
 // ============================================================
+// SECURITY SETTINGS (BARU)
+// ============================================================
+function pageSecuritySettings() {
+  const main = $('#main');
+  const sec = state.settings.security;
+  const render = () => {
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Keamanan</h2><div class="sub">Aturan void & refund</div></div>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      </div>
+      <div class="security-info">
+        Aturan ini membatasi kasir untuk void/refund supaya tidak bisa menghilangkan uang dari kas.
+        Void/refund yang melebihi limit akan butuh PIN owner.
+      </div>
+      <div class="form-section">
+        <label class="field"><span>Window void untuk kasir (menit)</span>
+          <input type="number" id="sec-window" value="${sec.voidWindowMinutes}" min="1" max="60" /></label>
+        <p class="muted small" style="margin:-6px 0 12px">Kasir hanya bisa void dalam X menit pertama setelah transaksi.</p>
+        <label class="field"><span>Limit void kasir (Rp)</span>
+          <input type="number" id="sec-void-limit" value="${sec.voidLimitCashier}" min="0" step="1000" /></label>
+        <label class="field"><span>Limit refund kasir (Rp)</span>
+          <input type="number" id="sec-refund-limit" value="${sec.refundLimitCashier}" min="0" step="1000" /></label>
+        <label class="field"><span>PIN Owner (4 digit)</span>
+          <input type="text" id="sec-pin" value="${sec.ownerPin}" maxlength="4" inputmode="numeric" /></label>
+        <label class="field"><span>Alert kalau kasir void ≥ X kali/hari</span>
+          <input type="number" id="sec-alert" value="${sec.alertVoidPerDay}" min="1" max="100" /></label>
+        <div class="form-actions" style="margin-top:8px">
+          <button class="btn btn-primary btn-block" id="sec-save">Simpan</button>
+        </div>
+      </div>
+    `;
+    $('#back-home').onclick = backHome;
+    $('#sec-save').onclick = () => {
+      const pin = $('#sec-pin').value.trim();
+      if (!/^\d{4}$/.test(pin)) return toast('PIN harus 4 digit angka', 'error');
+      sec.voidWindowMinutes = parseInt($('#sec-window').value) || 5;
+      sec.voidLimitCashier = parseInt($('#sec-void-limit').value) || 0;
+      sec.refundLimitCashier = parseInt($('#sec-refund-limit').value) || 0;
+      sec.ownerPin = pin;
+      sec.alertVoidPerDay = parseInt($('#sec-alert').value) || 5;
+      toast('Pengaturan keamanan disimpan', 'success');
+    };
+  };
+  render();
+}
+
+// ============================================================
+// AUDIT LOG (BARU)
+// ============================================================
+function pageAuditLog() {
+  const main = $('#main');
+  const render = () => {
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Audit Log</h2><div class="sub">${state.auditLog.length} catatan</div></div>
+        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      </div>
+      <div class="tx-list">
+        ${state.auditLog.length ? state.auditLog.map(a => `
+          <div class="audit-row">
+            <div class="a-head">
+              <span class="a-badge ${a.type}">${a.type === 'void' ? '⚠ VOID' : '↩ REFUND'}</span>
+              <span class="a-time">${formatTimestamp(a.at)}</span>
+            </div>
+            <div class="a-body">
+              <b>${a.trxId || '-'}</b> · ${rupiah(a.amount || 0)}
+              ${a.isFull === false ? ' <span style="color:var(--warn)">(partial)</span>' : ''}
+            </div>
+            <div class="a-meta">
+              <span>oleh ${a.byName || a.by}</span>
+              <span>${a.reason || '-'}</span>
+              ${a.device ? `<span>${a.device}</span>` : ''}
+            </div>
+          </div>
+        `).join('') : '<div class="empty"><div class="empty-title">Belum ada catatan</div><div class="empty-sub">Void/refund yang dilakukan akan tercatat di sini.</div></div>'}
+      </div>
+    `;
+    $('#back-home').onclick = backHome;
+  };
+  render();
+}
+
+// ============================================================
 // THEME SETTINGS
 // ============================================================
 function pageThemeSettings() {
@@ -2103,6 +2541,105 @@ function pageAbout() {
 }
 
 // ============================================================
+// EXPENSES (untuk kasir)
+// ============================================================
+function pageExpenses() {
+  const main = $('#main');
+  const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+  const render = () => {
+    const total = state.expenses.reduce((s, e) => s + e.amount, 0);
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Pengeluaran</h2><div class="sub">${state.expenses.length} catatan</div></div>
+        <button class="btn btn-ghost" id="back-home">← Kembali</button>
+      </div>
+      <div class="kpi-hero">
+        <div class="label">Total pengeluaran</div>
+        <div class="amount amount-expense">${rupiah(total)}</div>
+      </div>
+      <div class="kpi-compact" style="margin-bottom:16px">
+        ${CATS.map(cat => {
+          const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
+          return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
+        }).join('')}
+      </div>
+      <div class="tx-list">
+        ${state.expenses.length ? state.expenses.map(e => `
+          <div class="list-row">
+            <div>
+              <div class="row-title">${e.note || e.category}</div>
+              <div class="row-sub">${e.category} · ${e.date} · ${e.by}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
+              <div class="row-actions">
+                <button class="icon-btn sm" data-edit="${e.id}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="icon-btn sm" data-del="${e.id}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>`).join('')
+        : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap + untuk catat pengeluaran.</div></div>'}
+      </div>
+      <button class="fab" id="add-exp">+</button>
+    `;
+    $('#back-home').onclick = backHome;
+    $('#add-exp').onclick = () => expForm(null, CATS, render);
+    $$('[data-edit]').forEach(b => b.onclick = () => expForm(b.dataset.edit, CATS, render));
+    $$('[data-del]').forEach(b => b.onclick = () => {
+      const e = state.expenses.find(x => x.id === b.dataset.del);
+      if (!e) return;
+      confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
+        state.expenses = state.expenses.filter(x => x.id !== e.id);
+        render();
+        toast('Pengeluaran dihapus');
+      });
+    });
+  };
+  render();
+}
+
+function expForm(id, CATS, onDone) {
+  const e = id ? state.expenses.find(x => x.id === id) : null;
+  const isEdit = !!e;
+  const data = e || { amount: 0, category: CATS[0], note: '', date: nowDateTime() };
+  openSheet(`
+    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
+    <div class="form-page">
+      <label class="field"><span>Nominal (Rp)</span><input type="number" id="e-amount" value="${data.amount}" step="1000" min="0" /></label>
+      <label class="field"><span>Kategori</span>
+        <select id="e-cat">${CATS.map(c => `<option ${c===data.category?'selected':''}>${c}</option>`).join('')}</select>
+      </label>
+      <label class="field"><span>Catatan</span><input type="text" id="e-note" value="${data.note}" placeholder="Deskripsi singkat" /></label>
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="e-cancel">Batal</button>
+        <button class="btn btn-primary" id="e-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
+      </div>
+    </div>
+  `);
+  $('#e-cancel').onclick = closeSheet;
+  $('#e-save').onclick = () => {
+    const amount = parseInt($('#e-amount').value) || 0;
+    if (amount <= 0) return toast('Nominal harus > 0', 'error');
+    const obj = {
+      amount,
+      category: $('#e-cat').value,
+      note: $('#e-note').value.trim(),
+      date: isEdit ? data.date : nowDateTime(),
+      by: state.user.displayName,
+    };
+    if (isEdit) Object.assign(e, obj);
+    else state.expenses.push({ id: uid('EXP'), ...obj });
+    closeSheet();
+    if (typeof onDone === 'function') onDone();
+    toast('Pengeluaran disimpan', 'success');
+  };
+}
+
+// ============================================================
 // REPORTS
 // ============================================================
 function renderReports(main) {
@@ -2124,8 +2661,6 @@ function renderReports(main) {
     const monthTx = state.transactions.filter(t => t.date.startsWith(monthPrefix));
     const tx = tab === 'monthly' ? monthTx : todayTx;
 
-    // Hitung bersih (kecuali void)
-    const completed = tx.filter(t => t.status === 'completed' || t.status === 'partial_refund' || t.status === 'refunded');
     const active = tx.filter(t => t.status !== 'void');
     const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
@@ -2215,10 +2750,9 @@ function renderReports(main) {
           <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
           <div class="shift-row"><span class="lbl">Diskon</span><span class="val" style="color:var(--alert)">- ${rupiah(discount)}</span></div>
           <div class="shift-row"><span class="lbl">Pajak</span><span class="val" style="color:var(--alert)">- ${rupiah(tax)}</span></div>
-          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales + refundAmount)}</span></div>
           ${voidAmount > 0 ? `<div class="shift-row"><span class="lbl">Void</span><span class="val" style="color:var(--alert)">- ${rupiah(voidAmount)}</span></div>` : ''}
           ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
-          <div class="shift-row"><span class="lbl">Net (setelah void/refund)</span><span class="val">${rupiah(sales)}</span></div>
+          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
           <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
           <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
             <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
@@ -2267,7 +2801,7 @@ function renderReports(main) {
                 </div>
               </div>
             </div>`).join('')
-          : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap tombol + Tambah untuk catat pengeluaran.</div></div>'}
+          : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
         </div>
       ` : ''}
     `;
@@ -2292,43 +2826,6 @@ function renderReports(main) {
     }
   };
   render();
-}
-
-function expForm(id, CATS, onDone) {
-  const e = id ? state.expenses.find(x => x.id === id) : null;
-  const isEdit = !!e;
-  const data = e || { amount: 0, category: CATS[0], note: '', date: nowDateTime() };
-  openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
-    <div class="form-page">
-      <label class="field"><span>Nominal (Rp)</span><input type="number" id="e-amount" value="${data.amount}" step="1000" min="0" /></label>
-      <label class="field"><span>Kategori</span>
-        <select id="e-cat">${CATS.map(c => `<option ${c===data.category?'selected':''}>${c}</option>`).join('')}</select>
-      </label>
-      <label class="field"><span>Catatan</span><input type="text" id="e-note" value="${data.note}" placeholder="Deskripsi singkat" /></label>
-      <div class="form-actions">
-        <button class="btn btn-ghost" id="e-cancel">Batal</button>
-        <button class="btn btn-primary" id="e-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
-      </div>
-    </div>
-  `);
-  $('#e-cancel').onclick = closeSheet;
-  $('#e-save').onclick = () => {
-    const amount = parseInt($('#e-amount').value) || 0;
-    if (amount <= 0) return toast('Nominal harus > 0', 'error');
-    const obj = {
-      amount,
-      category: $('#e-cat').value,
-      note: $('#e-note').value.trim(),
-      date: isEdit ? data.date : nowDateTime(),
-      by: state.user.displayName,
-    };
-    if (isEdit) Object.assign(e, obj);
-    else state.expenses.push({ id: uid('EXP'), ...obj });
-    closeSheet();
-    if (typeof onDone === 'function') onDone();
-    toast('Pengeluaran disimpan', 'success');
-  };
 }
 
 // ============================================================
@@ -2429,8 +2926,12 @@ $('#notif-btn').onclick = () => {
     ${list.length ? `<div class="tx-list">
       ${list.map(n => `
         <div class="tx-item" style="grid-template-columns:1fr">
-          <div class="tx-id" style="color:${n.type === 'stock_low' ? 'var(--warn)' : n.type === 'out_of_stock' ? 'var(--alert)' : 'var(--primary)'}">
-            ${n.type === 'stock_low' ? '⚠ STOK MENIPIS' : n.type === 'out_of_stock' ? '⚠ STOK HABIS' : 'ℹ SISTEM'}
+          <div class="tx-id" style="color:${n.type === 'stock_low' ? 'var(--warn)' : n.type === 'out_of_stock' ? 'var(--alert)' : n.type === 'void' ? 'var(--alert)' : n.type === 'refund' ? 'var(--warn)' : 'var(--primary)'}">
+            ${n.type === 'stock_low' ? '⚠ STOK MENIPIS'
+              : n.type === 'out_of_stock' ? '⚠ STOK HABIS'
+              : n.type === 'void' ? '⚠ VOID TRANSAKSI'
+              : n.type === 'refund' ? '↩ REFUND'
+              : 'ℹ SISTEM'}
           </div>
           <div style="font-weight:500">${n.title}</div>
           <div class="muted small">${n.body} · ${n.time}</div>
