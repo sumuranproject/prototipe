@@ -1,7 +1,12 @@
 /* ============================================================
    SakuKasir — app.js (FULL)
+   Fitur: Auth, Permission kasir, POS, Void, Refund, Shift,
+          Dashboard, Laporan, Sidebar accordion, dll.
    ============================================================ */
 
+// ============================================================
+// STATE
+// ============================================================
 const state = {
   user: null,
   outlet: { id: 1, name: 'Toko Berkah' },
@@ -20,11 +25,11 @@ const state = {
   activeView: 'pos',
   ownerTab: 'dashboard',
   transactions: [
-    { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000 },
-    { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0 },
-    { id: 'TRX-20261006-0040', time: '13:48', date: '2026-10-06', items: [{ name: 'Nasi Goreng', qty: 3, price: 25000 }], total: 97000, method: 'cash', sync: 'pending', cashier: 'Andi', outlet: 'Toko Berkah', discount: 2000, tax: 0, received: 100000, change: 3000 },
-    { id: 'TRX-20261006-0039', time: '13:12', date: '2026-10-06', items: [{ name: 'Roti Bakar', qty: 2, price: 15000 }], total: 33000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 17000 },
-    { id: 'TRX-20261006-0038', time: '12:55', date: '2026-10-06', items: [{ name: 'Es Krim', qty: 4, price: 10000 }], total: 62000, method: 'qris', sync: 'error', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0 },
+    { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000, status: 'completed' },
+    { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
+    { id: 'TRX-20261006-0040', time: '13:48', date: '2026-10-06', items: [{ name: 'Nasi Goreng', qty: 3, price: 25000 }], total: 97000, method: 'cash', sync: 'pending', cashier: 'Andi', outlet: 'Toko Berkah', discount: 2000, tax: 0, received: 100000, change: 3000, status: 'completed' },
+    { id: 'TRX-20261006-0039', time: '13:12', date: '2026-10-06', items: [{ name: 'Roti Bakar', qty: 2, price: 15000 }], total: 33000, method: 'cash', sync: 'synced', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 17000, status: 'completed' },
+    { id: 'TRX-20261006-0038', time: '12:55', date: '2026-10-06', items: [{ name: 'Es Krim', qty: 4, price: 10000 }], total: 62000, method: 'qris', sync: 'error', cashier: 'Andi', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
   ],
   expenses: [
     { id: 'EXP-001', amount: 150000, category: 'Bahan', note: 'Beli kopi 2kg', date: '2026-10-06 08:00', by: 'Budi' },
@@ -48,9 +53,12 @@ const state = {
     { id: 8, name: 'Mie Instan Goreng', price: 12000, unit: 'porsi', cat: 'Makanan', stock: 2, low: 5, track: true, active: true },
   ],
   workers: [
-    { id: 1, username: 'kasir', displayName: 'Andi Wijaya', outlet: 'Toko Berkah', whatsapp: '0812-5555-6666', active: true },
-    { id: 2, username: 'kasir2', displayName: 'Siti Aminah', outlet: 'Cabang Pasar', whatsapp: '0812-7777-8888', active: true },
-    { id: 3, username: 'kasir3', displayName: 'Rudi Hartono', outlet: 'Toko Berkah', whatsapp: '', active: false },
+    { id: 1, username: 'kasir', displayName: 'Andi Wijaya', outlet: 'Toko Berkah', whatsapp: '0812-5555-6666', active: true,
+      permissions: ['pos','dashboard','transactions','shift','printer','sync','theme','profile'] },
+    { id: 2, username: 'kasir2', displayName: 'Siti Aminah', outlet: 'Cabang Pasar', whatsapp: '0812-7777-8888', active: true,
+      permissions: ['pos','transactions','shift','printer','sync','theme','profile'] },
+    { id: 3, username: 'kasir3', displayName: 'Rudi Hartono', outlet: 'Toko Berkah', whatsapp: '', active: false,
+      permissions: ['pos','printer','theme','profile'] },
   ],
   notifications: [
     { id: 1, type: 'stock_low', title: 'Stok menipis', body: 'Teh Manis · sisa 3', time: '14:00', read: false },
@@ -70,6 +78,30 @@ const state = {
   },
 };
 
+// ============================================================
+// PERMISSIONS
+// ============================================================
+const PERMISSIONS = [
+  { id: 'pos',          label: 'POS',             desc: 'Buat transaksi penjualan' },
+  { id: 'dashboard',    label: 'Dashboard',       desc: 'Ringkasan penjualan kasir' },
+  { id: 'transactions', label: 'Transaksi',       desc: 'Lihat riwayat transaksi sendiri' },
+  { id: 'shift',        label: 'Shift',           desc: 'Mulai & tutup shift' },
+  { id: 'printer',      label: 'Printer',         desc: 'Setup & cetak struk Bluetooth' },
+  { id: 'sync',         label: 'Sinkronisasi',    desc: 'Status & manual sync' },
+  { id: 'theme',        label: 'Ganti Tema',      desc: 'Terang / gelap' },
+  { id: 'profile',      label: 'Profil',          desc: 'Lihat info akun sendiri' },
+];
+
+function hasPerm(id) {
+  if (!state.user) return false;
+  if (state.user.role === 'owner') return true;
+  const p = state.user.permissions;
+  return Array.isArray(p) ? p.includes(id) : true;
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
@@ -92,6 +124,7 @@ function nowTime() { return new Date().toLocaleTimeString('id-ID', { hour: '2-di
 function nowDateTime() {
   return new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 function toast(msg, type = '') {
   const host = $('#toast-host');
@@ -161,7 +194,9 @@ function applyTheme(t) {
 }
 applyTheme(state.theme);
 
-/* AUTH */
+// ============================================================
+// AUTH
+// ============================================================
 function showView(id) {
   $$('.view').forEach(v => v.classList.remove('active'));
   $('#' + id).classList.add('active');
@@ -234,12 +269,26 @@ $('#login-form').addEventListener('submit', (e) => {
     btn.classList.remove('loading');
     if (user === 'owner') {
       state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner' };
-    } else if (user === 'kasir') {
-      state.user = { username: 'kasir', displayName: 'Andi Wijaya', role: 'cashier' };
     } else {
-      errEl.textContent = 'Username atau password salah.';
-      errEl.hidden = false;
-      return;
+      // Cari worker by username
+      const w = state.workers.find(x => x.username === user);
+      if (!w) {
+        errEl.textContent = 'Username atau password salah.';
+        errEl.hidden = false;
+        return;
+      }
+      if (!w.active) {
+        errEl.textContent = 'Akun dinonaktifkan. Hubungi owner.';
+        errEl.hidden = false;
+        return;
+      }
+      state.user = {
+        username: w.username,
+        displayName: w.displayName,
+        role: 'cashier',
+        outlet: w.outlet,
+        permissions: w.permissions || ['pos','transactions','shift','printer','sync','theme','profile'],
+      };
     }
     enterApp();
   }, 500);
@@ -247,19 +296,20 @@ $('#login-form').addEventListener('submit', (e) => {
 
 function enterApp() {
   showView('view-app');
-  if (state.user.role === 'cashier' && !state.activeShift) {
-    state.activeShift = {
-      id: uid('SH'), startTime: nowTime(),
-      openingCash: 200000, transactions: 24,
-      cashSales: 850000, qrisSales: 420000,
-    };
+  if (state.user.role === 'cashier') {
+    if (hasPerm('pos')) state.activeView = 'pos';
+    else if (hasPerm('dashboard')) state.activeView = 'dashboard';
+    else if (hasPerm('transactions')) state.activeView = 'transactions';
+    else if (hasPerm('shift')) state.activeView = 'shift';
+    else state.activeView = 'pos';
+  } else {
+    state.ownerTab = 'dashboard';
   }
-  state.activeView = state.user.role === 'cashier' ? 'pos' : 'dashboard';
-  state.ownerTab = 'dashboard';
   renderNav();
   renderMain();
   updateSyncIndicator();
   renderSidebar();
+  renderOutletChip();
 }
 
 function handleLogout() {
@@ -284,15 +334,20 @@ function doLogout() {
   $('#login-error').hidden = true;
 }
 
-/* NAV */
+// ============================================================
+// NAV (role + permission aware)
+// ============================================================
 function renderNav() {
   const nav = $('#bottom-nav');
   if (state.user.role === 'cashier') {
-    nav.innerHTML = `
-      ${navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
-      ${navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>')}
-      ${navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>')}
-    `;
+    const items = [];
+    if (hasPerm('dashboard'))    items.push(navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>'));
+    if (hasPerm('pos'))          items.push(navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
+    if (hasPerm('transactions')) items.push(navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>'));
+    if (hasPerm('shift'))        items.push(navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'));
+    nav.innerHTML = items.length
+      ? items.join('')
+      : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
   } else {
     nav.innerHTML = `
       ${navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>')}
@@ -322,7 +377,9 @@ function navItem(view, label, svgInner) {
     </button>`;
 }
 
-/* ROUTER */
+// ============================================================
+// ROUTER
+// ============================================================
 function renderMain() {
   const main = $('#main');
   const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
@@ -333,7 +390,52 @@ function renderMain() {
   if (v === 'reports') return renderReports(main);
 }
 
-/* POS */
+// ============================================================
+// OUTLET CHIP
+// ============================================================
+function renderOutletChip() {
+  const chip = $('#outlet-chip');
+  const nameEl = $('#outlet-name');
+  const isOwner = state.user.role === 'owner';
+  const chev = chip.querySelector('svg');
+
+  if (isOwner) {
+    nameEl.textContent = state.outlet.name;
+    chip.style.cursor = 'pointer';
+    chip.style.pointerEvents = '';
+    if (chev) chev.style.display = '';
+    chip.onclick = () => {
+      openSheet(`
+        <h3 style="font-size:17px;margin-bottom:12px">Pilih outlet</h3>
+        <div class="tx-list">
+          ${state.outlets.filter(o => o.active).map(o => `
+            <button class="list-row" data-outlet="${o.name}">
+              <div><div class="row-title">${o.name}</div><div class="row-sub">${o.address}</div></div>
+              ${state.outlet.name === o.name ? '<span style="color:var(--primary);font-weight:600">Aktif</span>' : ''}
+            </button>`).join('')}
+        </div>
+      `);
+      $$('[data-outlet]').forEach(b => b.onclick = () => {
+        const o = state.outlets.find(x => x.name === b.dataset.outlet);
+        state.outlet = o;
+        $('#outlet-name').textContent = o.name;
+        state.settings.receipt.bizName = o.name;
+        closeSheet();
+        toast('Outlet diganti: ' + o.name);
+      });
+    };
+  } else {
+    nameEl.textContent = state.user.outlet || state.outlet.name;
+    chip.style.cursor = 'default';
+    chip.style.pointerEvents = 'none';
+    if (chev) chev.style.display = 'none';
+    chip.onclick = null;
+  }
+}
+
+// ============================================================
+// POS
+// ============================================================
 function renderPOS(main) {
   const cats = ['Semua', ...state.categories.filter(c => c.active).map(c => c.name)];
   main.innerHTML = `
@@ -483,7 +585,9 @@ function openCartSheet() {
   $('#go-checkout').onclick = () => { closeSheet(); openCheckout(); };
 }
 
-/* CHECKOUT */
+// ============================================================
+// CHECKOUT
+// ============================================================
 function openCheckout() {
   let method = 'cash', discount = 0, taxPct = 0, cashReceived = 0;
   const render = () => {
@@ -544,16 +648,17 @@ function openCheckout() {
       $('#pay-btn').onclick = () => {
         const t = calculateTotals(state.cart, discount, taxPct);
         const tx = {
-          id: 'TRX-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + String(state.transactions.length + 1).padStart(4, '0'),
-          time: nowTime(), date: new Date().toISOString().slice(0, 10),
+          id: 'TRX-' + todayStr().replace(/-/g, '') + '-' + String(state.transactions.length + 1).padStart(4, '0'),
+          time: nowTime(), date: todayStr(),
           items: state.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
           total: t.total, method,
           sync: state.online ? 'synced' : 'pending',
           cashier: state.user.displayName.split(' ')[0],
-          outlet: state.outlet.name,
+          outlet: state.user.role === 'cashier' ? state.user.outlet : state.outlet.name,
           discount: t.discount, tax: t.tax, taxPct: t.taxPct,
           received: method === 'cash' ? cashReceived : null,
           change: method === 'cash' ? cashReceived - t.total : 0,
+          status: 'completed',
         };
         state.transactions.unshift(tx);
         if (!state.online) state.syncQueue.push({ type: 'transaction', id: tx.id });
@@ -606,10 +711,14 @@ function showSuccess(tx) {
   $('#view-detail').onclick = () => { nav.style.display = ''; showTxDetail(tx.id); };
 }
 
-/* TRANSACTIONS */
+// ============================================================
+// TRANSACTIONS (list + detail + void + refund)
+// ============================================================
 function renderTransactions(main) {
   const isOwner = state.user.role === 'owner';
-  const list = isOwner ? state.transactions : state.transactions.filter(t => t.cashier === state.user.displayName.split(' ')[0]);
+  const list = isOwner
+    ? state.transactions
+    : state.transactions.filter(t => t.cashier === state.user.displayName.split(' ')[0]);
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Transaksi</h2><div class="sub">${list.length} transaksi</div></div>
@@ -631,24 +740,64 @@ function renderTransactions(main) {
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
+function txStatusBadge(tx) {
+  if (tx.status === 'void') return '<span class="tx-status void">⚠ VOID</span>';
+  if (tx.status === 'refunded') return '<span class="tx-status refunded">↩ REFUND</span>';
+  if (tx.status === 'partial_refund') return '<span class="tx-status partial">↩ PARTIAL</span>';
+  return '';
+}
+
 function renderTxItem(tx) {
   const sl = { synced: '✓', pending: '⏳', error: '⚠' }[tx.sync];
+  const statusClass = tx.status === 'void' ? 'void'
+    : tx.status === 'refunded' ? 'refunded'
+    : tx.status === 'partial_refund' ? 'partial'
+    : '';
+  const refundNote = tx.status === 'partial_refund'
+    ? `<div class="tx-refund-note">Refund sebagian · ${rupiah(tx.refundAmount || 0)}</div>`
+    : '';
   return `
-    <button class="tx-item" data-id="${tx.id}">
+    <button class="tx-item ${statusClass}" data-id="${tx.id}">
       <div class="tx-id">#${tx.id.slice(-4)} · ${tx.time}
         <span class="sync-badge ${tx.sync}">${sl} ${tx.sync}</span>
+        ${txStatusBadge(tx)}
       </div>
       <div class="tx-total">${rupiah(tx.total)}</div>
       <div class="tx-meta">${tx.items.reduce((s,i)=>s+i.qty,0)} item · ${tx.method === 'cash' ? 'Cash' : 'QRIS'}</div>
+      ${refundNote}
     </button>`;
 }
 
 function showTxDetail(id) {
   const tx = state.transactions.find(t => t.id === id);
   if (!tx) return;
+  const isOwner = state.user.role === 'owner';
+  const isToday = tx.date === todayStr();
+  const canVoid = isOwner && tx.status === 'completed' && isToday;
+  const canRefund = isOwner && (tx.status === 'completed' || tx.status === 'partial_refund');
+
+  let statusBanner = '';
+  if (tx.status === 'void') {
+    statusBanner = `<div class="status-banner void">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
+      <div><strong>VOID</strong>${tx.voidReason || ''} · ${tx.voidedAt || ''}</div>
+    </div>`;
+  } else if (tx.status === 'refunded') {
+    statusBanner = `<div class="status-banner refund">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
+      <div><strong>REFUND PENUH</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod} · ${tx.refundReason || ''} · ${tx.refundedAt || ''}</div>
+    </div>`;
+  } else if (tx.status === 'partial_refund') {
+    statusBanner = `<div class="status-banner refund">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
+      <div><strong>REFUND SEBAGIAN</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod} · ${tx.refundReason || ''} · ${tx.refundedAt || ''}</div>
+    </div>`;
+  }
+
   openSheet(`
     <h3 style="font-size:17px;margin-bottom:4px">${tx.id}</h3>
     <p class="muted small" style="margin:0 0 16px">${tx.date} · ${tx.time} · ${tx.outlet}</p>
+    ${statusBanner}
     <div class="shift-rows">
       <div class="shift-row"><span class="lbl">Kasir</span><span class="val">${tx.cashier}</span></div>
       <div class="shift-row"><span class="lbl">Metode</span><span class="val">${tx.method === 'cash' ? 'Cash' : 'QRIS'}</span></div>
@@ -671,15 +820,201 @@ function showTxDetail(id) {
       <div class="summary-row"><span>Kembalian</span><span>${rupiah(tx.change)}</span></div>` : ''}
     <div style="display:grid;gap:8px;margin-top:16px">
       <button class="btn btn-primary btn-block" id="print-again">Cetak ulang struk</button>
+      ${(canVoid || canRefund) ? `
+        <div class="tx-actions-2">
+          ${canVoid ? '<button class="btn btn-danger" id="void-btn">Void</button>' : ''}
+          ${canRefund ? '<button class="btn btn-ghost" id="refund-btn">Refund</button>' : ''}
+        </div>` : ''}
     </div>
   `);
   $('#print-again').onclick = () => {
     if (state.settings.printer.connected) { toast('Mencetak ulang…'); printReceipt(tx); }
     else toast('Printer belum terhubung', 'error');
   };
+  if (canVoid && $('#void-btn')) $('#void-btn').onclick = () => openVoidSheet(tx);
+  if (canRefund && $('#refund-btn')) $('#refund-btn').onclick = () => openRefundSheet(tx);
 }
 
-/* SHIFT */
+// ============================================================
+// VOID
+// ============================================================
+function openVoidSheet(tx) {
+  const REASONS = ['Salah input', 'Customer batal', 'Double entry', 'Lainnya'];
+  let reason = REASONS[0];
+
+  const render = () => {
+    openSheet(`
+      <h3 style="font-size:17px;margin-bottom:4px">Void transaksi</h3>
+      <p class="muted small" style="margin:0 0 16px">${tx.id} · ${rupiah(tx.total)} · ${tx.method === 'cash' ? 'Cash' : 'QRIS'}</p>
+      <div class="status-banner void" style="margin-bottom:16px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        <div>Void tidak menghapus transaksi dari riwayat. Transaksi akan ditandai VOID dan tidak dihitung di penjualan.</div>
+      </div>
+      <div class="section-title" style="margin-top:0">Alasan void</div>
+      <div class="reason-grid" id="void-reasons">
+        ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
+      </div>
+      ${reason === 'Lainnya' ? `
+        <label class="field" style="margin-top:12px"><span>Keterangan</span>
+          <input type="text" id="void-note" placeholder="Tulis alasan…" /></label>
+      ` : ''}
+      <div class="form-actions" style="margin-top:20px">
+        <button class="btn btn-ghost" id="void-cancel">Batal</button>
+        <button class="btn btn-danger" id="void-confirm">Void transaksi</button>
+      </div>
+    `);
+    $$('#void-reasons .reason-chip').forEach(b => b.onclick = () => { reason = b.dataset.r; render(); });
+    $('#void-cancel').onclick = closeSheet;
+    $('#void-confirm').onclick = () => {
+      let finalReason = reason;
+      if (reason === 'Lainnya') {
+        const note = ($('#void-note')?.value || '').trim();
+        if (!note) return toast('Keterangan wajib diisi', 'error');
+        finalReason = note;
+      }
+      tx.status = 'void';
+      tx.voidReason = finalReason;
+      tx.voidedAt = nowDateTime();
+      closeSheet();
+      toast('Transaksi di-void', 'success');
+      renderMain();
+    };
+  };
+  render();
+}
+
+// ============================================================
+// REFUND
+// ============================================================
+function openRefundSheet(tx) {
+  const REASONS = ['Barang rusak', 'Salah pesan', 'Komplain', 'Lainnya'];
+  // Item yang belum di-refund (kalau partial sebelumnya, exclude yang sudah)
+  const alreadyRefunded = tx.refundedItems || [];
+  const refundable = tx.items.map((it, idx) => ({
+    idx, name: it.name, qty: it.qty, price: it.price,
+    maxQty: it.qty - (alreadyRefunded.find(r => r.idx === idx)?.qty || 0),
+  })).filter(it => it.maxQty > 0);
+
+  const checked = new Set(refundable.map(it => it.idx)); // default semua dipilih
+  const qtyMap = {};
+  refundable.forEach(it => qtyMap[it.idx] = it.maxQty);
+
+  let method = tx.method === 'cash' ? 'cash' : 'qris';
+  let reason = REASONS[0];
+
+  const render = () => {
+    const totalRefund = refundable
+      .filter(it => checked.has(it.idx))
+      .reduce((sum, it) => sum + it.price * (qtyMap[it.idx] || 0), 0);
+    const allChecked = refundable.every(it => checked.has(it.idx));
+    const isFull = allChecked && refundable.every(it => qtyMap[it.idx] === it.maxQty);
+    const refundLabel = isFull ? 'Refund penuh' : 'Refund sebagian';
+
+    openSheet(`
+      <h3 style="font-size:17px;margin-bottom:4px">Refund transaksi</h3>
+      <p class="muted small" style="margin:0 0 16px">${tx.id} · Total asli ${rupiah(tx.total)}</p>
+      <div class="section-title" style="margin-top:0">Pilih item yang di-refund</div>
+      <div class="refund-items">
+        ${refundable.map(it => `
+          <div class="refund-item ${checked.has(it.idx) ? 'checked' : ''}" data-idx="${it.idx}">
+            <div class="ri-check">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </div>
+            <div class="ri-body">
+              <div class="ri-name">${it.name}</div>
+              <div class="ri-sub">${rupiah(it.price)} × ${qtyMap[it.idx]} (max ${it.maxQty})</div>
+            </div>
+            <div class="ri-price">${rupiah(it.price * qtyMap[it.idx])}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="summary-row total" style="margin-top:12px">
+        <span>Total refund</span>
+        <span style="color:var(--warn)">${rupiah(totalRefund)}</span>
+      </div>
+      <div class="section-title">Metode refund</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <button class="btn ${method === 'cash' ? 'btn-primary' : 'btn-ghost'}" id="rf-cash">Cash</button>
+        <button class="btn ${method === 'qris' ? 'btn-primary' : 'btn-ghost'}" id="rf-qris">QRIS</button>
+      </div>
+      <div class="section-title" style="margin-top:0">Alasan refund</div>
+      <div class="reason-grid" id="rf-reasons">
+        ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
+      </div>
+      ${reason === 'Lainnya' ? `
+        <label class="field" style="margin-top:12px"><span>Keterangan</span>
+          <input type="text" id="rf-note" placeholder="Tulis alasan…" /></label>
+      ` : ''}
+      <div class="form-actions" style="margin-top:20px">
+        <button class="btn btn-ghost" id="rf-cancel">Batal</button>
+        <button class="btn btn-primary" id="rf-confirm" ${totalRefund > 0 ? '' : 'disabled'}>
+          ${refundLabel} · ${rupiah(totalRefund)}
+        </button>
+      </div>
+    `);
+
+    $$('.refund-item').forEach(el => {
+      el.onclick = () => {
+        const idx = parseInt(el.dataset.idx);
+        if (checked.has(idx)) checked.delete(idx);
+        else checked.add(idx);
+        render();
+      };
+    });
+    $('#rf-cash').onclick = () => { method = 'cash'; render(); };
+    $('#rf-qris').onclick = () => { method = 'qris'; render(); };
+    $$('#rf-reasons .reason-chip').forEach(b => b.onclick = () => { reason = b.dataset.r; render(); });
+    $('#rf-cancel').onclick = closeSheet;
+
+    if (totalRefund > 0) {
+      $('#rf-confirm').onclick = () => {
+        let finalReason = reason;
+        if (reason === 'Lainnya') {
+          const note = ($('#rf-note')?.value || '').trim();
+          if (!note) return toast('Keterangan wajib diisi', 'error');
+          finalReason = note;
+        }
+        const selectedItems = refundable
+          .filter(it => checked.has(it.idx))
+          .map(it => ({ idx: it.idx, name: it.name, qty: qtyMap[it.idx], amount: it.price * qtyMap[it.idx] }));
+
+        const prevRefund = tx.refundAmount || 0;
+        const newRefund = prevRefund + totalRefund;
+        const prevItems = tx.refundedItems || [];
+
+        // Merge items
+        const merged = [...prevItems];
+        selectedItems.forEach(si => {
+          const existing = merged.find(m => m.idx === si.idx);
+          if (existing) existing.qty += si.qty;
+          else merged.push(si);
+        });
+
+        tx.refundedItems = merged;
+        tx.refundAmount = newRefund;
+        tx.refundMethod = method;
+        tx.refundReason = finalReason;
+        tx.refundedAt = nowDateTime();
+
+        // Full refund kalau semua item sudah habis di-refund
+        const allRefunded = tx.items.every((it, idx) => {
+          const r = merged.find(m => m.idx === idx);
+          return r && r.qty >= it.qty;
+        });
+        tx.status = allRefunded ? 'refunded' : 'partial_refund';
+
+        closeSheet();
+        toast(allRefunded ? 'Refund penuh berhasil' : 'Refund sebagian berhasil', 'success');
+        renderMain();
+      };
+    }
+  };
+  render();
+}
+
+// ============================================================
+// SHIFT
+// ============================================================
 function renderShift(main) {
   const s = state.activeShift;
   main.innerHTML = `
@@ -759,14 +1094,25 @@ function renderShift(main) {
   }
 }
 
-/* DASHBOARD */
+// ============================================================
+// DASHBOARD
+// ============================================================
 function renderDashboard(main) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayStr();
   const todayTx = state.transactions.filter(t => t.date === today);
-  const totalSales = todayTx.reduce((s, t) => s + t.total, 0);
-  const cash = todayTx.filter(t => t.method === 'cash').reduce((s, t) => s + t.total, 0);
-  const qris = todayTx.filter(t => t.method === 'qris').reduce((s, t) => s + t.total, 0);
+  const active = todayTx.filter(t => t.status === 'completed' || t.status === 'partial_refund');
+  const voided = todayTx.filter(t => t.status === 'void');
+  const refunded = todayTx.filter(t => t.status === 'refunded' || t.status === 'partial_refund');
+
+  const totalSales = active.reduce((s, t) => {
+    const refundPart = t.refundAmount || 0;
+    return s + (t.total - refundPart);
+  }, 0);
+  const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+  const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const expense = state.expenses.filter(e => e.date.startsWith(today)).reduce((s, e) => s + e.amount, 0);
+  const voidAmount = voided.reduce((s, t) => s + t.total, 0);
+  const refundAmount = refunded.reduce((s, t) => s + (t.refundAmount || 0), 0);
   const net = totalSales - expense;
 
   if (state.user.role === 'cashier') {
@@ -778,7 +1124,7 @@ function renderDashboard(main) {
       <div class="kpi-hero">
         <div class="label">Penjualan hari ini</div>
         <div class="amount">${rupiah(totalSales)}</div>
-        <div class="delta">${todayTx.length} transaksi</div>
+        <div class="delta">${active.length} transaksi</div>
       </div>
       <div class="kpi-grid">
         <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
@@ -808,14 +1154,19 @@ function renderDashboard(main) {
     <div class="kpi-hero">
       <div class="label">Penjualan hari ini</div>
       <div class="amount">${rupiah(totalSales)}</div>
-      <div class="delta">${todayTx.length} transaksi</div>
+      <div class="delta">${active.length} transaksi</div>
     </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
       <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
+      <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
+      <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
+    </div>
+    <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
       <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount">${rupiah(net)}</div></div>
     </div>
+
     <div class="chart-card">
       <div class="chart-title">7 hari terakhir</div>
       <div class="bar-chart">
@@ -846,35 +1197,58 @@ function renderDashboard(main) {
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
-/* SIDEBAR — Accordion */
+// ============================================================
+// SIDEBAR (accordion, role-aware)
+// ============================================================
 function renderSidebar() {
   const body = $('#sidebar-body');
   if (!body) return;
-  const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
-  const outCount = state.products.filter(p => p.track && p.stock === 0).length;
-  const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
 
-  const groups = [
-    { id: 'katalog', title: 'Katalog', items: [
-      { label: 'Produk', route: 'products', count: state.products.length },
-      { label: 'Kategori', route: 'categories', count: state.categories.length },
-      { label: 'Stok', route: 'inventory', badge: stockBadge },
-    ]},
-    { id: 'bisnis', title: 'Bisnis', items: [
-      { label: 'Outlet', route: 'outlets', count: state.outlets.length },
-      { label: 'Kasir', route: 'workers', count: state.workers.length },
-    ]},
-    { id: 'pengaturan', title: 'Pengaturan', items: [
-      { label: 'QRIS', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
-      { label: 'Printer', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
-      { label: 'Struk', route: 'receipt' },
-      { label: 'Notifikasi', route: 'notif-settings' },
-      { label: 'Sinkronisasi', route: 'sync-settings', count: state.syncQueue.length || null },
-      { label: 'Tema', route: 'theme-settings', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } },
-      { label: 'Profil', route: 'profile' },
-      { label: 'Tentang', route: 'about' },
-    ]},
-  ];
+  const isOwner = state.user.role === 'owner';
+  let groups = [];
+
+  if (isOwner) {
+    const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
+    const outCount = state.products.filter(p => p.track && p.stock === 0).length;
+    const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
+
+    groups = [
+      { id: 'katalog', title: 'Katalog', items: [
+        { label: 'Produk', route: 'products', count: state.products.length },
+        { label: 'Kategori', route: 'categories', count: state.categories.length },
+        { label: 'Stok', route: 'inventory', badge: stockBadge },
+      ]},
+      { id: 'bisnis', title: 'Bisnis', items: [
+        { label: 'Outlet', route: 'outlets', count: state.outlets.length },
+        { label: 'Kasir', route: 'workers', count: state.workers.length },
+      ]},
+      { id: 'pengaturan', title: 'Pengaturan', items: [
+        { label: 'QRIS', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+        { label: 'Printer', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+        { label: 'Struk', route: 'receipt' },
+        { label: 'Notifikasi', route: 'notif-settings' },
+        { label: 'Sinkronisasi', route: 'sync-settings', count: state.syncQueue.length || null },
+        { label: 'Tema', route: 'theme-settings', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } },
+        { label: 'Profil', route: 'profile' },
+        { label: 'Tentang', route: 'about' },
+      ]},
+    ];
+  } else {
+    const akunItems = [];
+    if (hasPerm('profile')) akunItems.push({ label: 'Profil', route: 'cashier-profile' });
+
+    const perangkatItems = [];
+    if (hasPerm('printer')) perangkatItems.push({ label: 'Printer', route: 'cashier-printer' });
+    if (hasPerm('sync'))    perangkatItems.push({ label: 'Sinkronisasi', route: 'cashier-sync', count: state.syncQueue.length || null });
+
+    const tampilanItems = [];
+    if (hasPerm('theme')) tampilanItems.push({ label: 'Tema', route: 'cashier-theme', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } });
+
+    if (akunItems.length)      groups.push({ id: 'akun',      title: 'Akun',      items: akunItems });
+    if (perangkatItems.length) groups.push({ id: 'perangkat', title: 'Perangkat', items: perangkatItems });
+    if (tampilanItems.length)  groups.push({ id: 'tampilan',  title: 'Tampilan',  items: tampilanItems });
+    groups.push({ id: 'info', title: 'Info', items: [{ label: 'Tentang', route: 'about' }] });
+  }
 
   body.innerHTML = groups.map(g => `
     <div class="sidebar-accordion open" data-acc="${g.id}">
@@ -897,7 +1271,6 @@ function renderSidebar() {
   body.querySelectorAll('.sidebar-accordion-header').forEach(h => {
     h.onclick = () => h.parentElement.classList.toggle('open');
   });
-
   body.querySelectorAll('[data-route]').forEach(el => {
     el.onclick = () => {
       closeSidebar();
@@ -909,7 +1282,14 @@ function renderSidebar() {
 let _sidebarScrollY = 0;
 
 function openSidebar() {
-  if (!state.user || state.user.role !== 'owner') return;
+  if (!state.user) return;
+  const isOwner = state.user.role === 'owner';
+
+  const titleEl = document.querySelector('#sidebar .sidebar-header > div:nth-child(2) > div:first-child');
+  const subEl = document.querySelector('#sidebar .sidebar-header > div:nth-child(2) > div:last-child');
+  if (titleEl) titleEl.textContent = isOwner ? 'Kelola' : 'Akun Saya';
+  if (subEl) subEl.textContent = isOwner ? 'Menu owner' : 'Pengaturan kasir';
+
   renderSidebar();
 
   _sidebarScrollY = window.scrollY || window.pageYOffset || 0;
@@ -925,16 +1305,13 @@ function openSidebar() {
 
 function closeSidebar() {
   const wasOpen = !$('#sidebar').hidden;
-
   $('#sidebar').hidden = true;
   $('#sidebar-backdrop').hidden = true;
-
   document.body.style.position = '';
   document.body.style.top = '';
   document.body.style.left = '';
   document.body.style.right = '';
   document.body.classList.remove('sidebar-open');
-
   if (wasOpen) window.scrollTo(0, _sidebarScrollY);
 }
 
@@ -946,6 +1323,9 @@ $('#sidebar-close').addEventListener('click', closeSidebar);
 $('#sidebar-backdrop').addEventListener('click', closeSidebar);
 $('#sidebar-logout').addEventListener('click', () => { closeSidebar(); handleLogout(); });
 
+// ============================================================
+// ROUTER UNTUK SIDEBAR
+// ============================================================
 function routeManage(route) {
   if (route === 'products') return pageProducts();
   if (route === 'categories') return pageCategories();
@@ -960,11 +1340,28 @@ function routeManage(route) {
   if (route === 'theme-settings') return pageThemeSettings();
   if (route === 'profile') return pageProfile();
   if (route === 'about') return pageAbout();
+  if (route === 'cashier-profile') return pageProfile();
+  if (route === 'cashier-printer') return pagePrinterSettings();
+  if (route === 'cashier-sync') return pageSyncSettings();
+  if (route === 'cashier-theme') return pageThemeSettings();
 }
 
-function backHome() { state.ownerTab = 'dashboard'; renderNav(); renderMain(); }
+function backHome() {
+  if (state.user.role === 'cashier') {
+    if (hasPerm('pos')) state.activeView = 'pos';
+    else if (hasPerm('dashboard')) state.activeView = 'dashboard';
+    else if (hasPerm('transactions')) state.activeView = 'transactions';
+    else if (hasPerm('shift')) state.activeView = 'shift';
+  } else {
+    state.ownerTab = 'dashboard';
+  }
+  renderNav();
+  renderMain();
+}
 
-/* PRODUCTS */
+// ============================================================
+// PRODUCTS
+// ============================================================
 function pageProducts() {
   const main = $('#main');
   main.innerHTML = `
@@ -1083,7 +1480,9 @@ function productForm(id) {
   };
 }
 
-/* CATEGORIES */
+// ============================================================
+// CATEGORIES
+// ============================================================
 function pageCategories() {
   const main = $('#main');
   const render = () => {
@@ -1143,7 +1542,9 @@ function pageCategories() {
   render();
 }
 
-/* INVENTORY */
+// ============================================================
+// INVENTORY
+// ============================================================
 function pageInventory() {
   const main = $('#main');
   const render = () => {
@@ -1216,7 +1617,9 @@ function pageInventory() {
   render();
 }
 
-/* OUTLETS */
+// ============================================================
+// OUTLETS
+// ============================================================
 function pageOutlets() {
   const main = $('#main');
   const render = () => {
@@ -1294,7 +1697,9 @@ function outletForm(id) {
   };
 }
 
-/* WORKERS */
+// ============================================================
+// WORKERS (dengan permission toggle)
+// ============================================================
 function pageWorkers() {
   const main = $('#main');
   const render = () => {
@@ -1304,21 +1709,24 @@ function pageWorkers() {
         <button class="btn btn-ghost" id="back-home">← Beranda</button>
       </div>
       <div class="tx-list">
-        ${state.workers.map(w => `
-          <div class="list-row">
-            <div>
-              <div class="row-title">${w.displayName} ${w.active ? '<span class="pill pill-active">aktif</span>' : '<span class="pill pill-inactive">nonaktif</span>'}</div>
-              <div class="row-sub">@${w.username} · ${w.outlet}${w.whatsapp ? ' · ' + w.whatsapp : ''}</div>
-            </div>
-            <div class="row-actions">
-              <button class="icon-btn sm" data-edit="${w.id}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              </button>
-              <button class="icon-btn sm" data-toggle="${w.id}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
-              </button>
-            </div>
-          </div>`).join('')}
+        ${state.workers.map(w => {
+          const permCount = (w.permissions || []).length;
+          return `
+            <div class="list-row">
+              <div>
+                <div class="row-title">${w.displayName} ${w.active ? '<span class="pill pill-active">aktif</span>' : '<span class="pill pill-inactive">nonaktif</span>'}</div>
+                <div class="row-sub">@${w.username} · ${w.outlet} · ${permCount} fitur</div>
+              </div>
+              <div class="row-actions">
+                <button class="icon-btn sm" data-edit="${w.id}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </button>
+                <button class="icon-btn sm" data-toggle="${w.id}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </button>
+              </div>
+            </div>`;
+        }).join('')}
       </div>
       <button class="fab" id="add-worker">+</button>
     `;
@@ -1338,7 +1746,12 @@ function pageWorkers() {
 function workerForm(id) {
   const w = id ? state.workers.find(x => x.id === id) : null;
   const isEdit = !!w;
-  const data = w || { username: '', displayName: '', outlet: state.outlets[0]?.name || '', whatsapp: '', active: true };
+  const data = w || {
+    username: '', displayName: '', outlet: state.outlets[0]?.name || '', whatsapp: '', active: true,
+    permissions: ['pos','transactions','shift','printer','theme','profile'],
+  };
+  const currentPerms = data.permissions || [];
+
   openSheet(`
     <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit kasir' : 'Kasir baru'}</h3>
     <div class="form-page">
@@ -1352,20 +1765,54 @@ function workerForm(id) {
         <div style="font-weight:500">Akun aktif</div>
         <button class="switch ${data.active ? 'on' : ''}" id="w-active"></button>
       </div>
+
+      <div class="section-title" style="margin:16px 0 8px">Akses Fitur</div>
+      <p class="muted small" style="margin:-6px 0 8px">Pilih fitur yang boleh dipakai kasir ini.</p>
+      <div id="w-perms">
+        ${PERMISSIONS.map(p => `
+          <div class="switch-row" style="align-items:flex-start;gap:12px">
+            <div style="flex:1">
+              <div style="font-weight:500">${p.label}</div>
+              <div class="muted small">${p.desc}</div>
+            </div>
+            <button class="switch ${currentPerms.includes(p.id) ? 'on' : ''}" data-perm="${p.id}"></button>
+          </div>
+        `).join('')}
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-ghost" id="w-cancel">Batal</button>
         <button class="btn btn-primary" id="w-save">${isEdit ? 'Simpan' : 'Tambah'}</button>
       </div>
     </div>
   `);
+
   let active = data.active;
+  let perms = [...currentPerms];
+
   $('#w-active').onclick = e => { active = !active; e.target.classList.toggle('on', active); };
+  $$('#w-perms [data-perm]').forEach(btn => {
+    btn.onclick = e => {
+      const pid = btn.dataset.perm;
+      if (perms.includes(pid)) perms = perms.filter(x => x !== pid);
+      else perms.push(pid);
+      e.target.classList.toggle('on', perms.includes(pid));
+    };
+  });
+
   $('#w-cancel').onclick = closeSheet;
   $('#w-save').onclick = () => {
     const displayName = $('#w-name').value.trim();
     const username = $('#w-user').value.trim();
     if (!displayName || !username) return toast('Nama dan username wajib', 'error');
-    const obj = { displayName, username, outlet: $('#w-outlet').value, whatsapp: $('#w-wa').value.trim(), active };
+    if (!perms.length) return toast('Minimal 1 fitur harus diaktifkan', 'error');
+    const obj = {
+      displayName, username,
+      outlet: $('#w-outlet').value,
+      whatsapp: $('#w-wa').value.trim(),
+      active,
+      permissions: perms,
+    };
     if (isEdit) Object.assign(w, obj);
     else state.workers.push({ id: Date.now(), ...obj });
     closeSheet();
@@ -1374,7 +1821,9 @@ function workerForm(id) {
   };
 }
 
-/* QRIS */
+// ============================================================
+// QRIS
+// ============================================================
 function pageQRIS() {
   const main = $('#main');
   const render = () => {
@@ -1419,7 +1868,9 @@ function pageQRIS() {
   render();
 }
 
-/* PRINTER SETTINGS */
+// ============================================================
+// PRINTER
+// ============================================================
 function pagePrinterSettings() {
   const main = $('#main');
   const render = () => {
@@ -1464,7 +1915,9 @@ function pagePrinterSettings() {
   render();
 }
 
-/* RECEIPT SETTINGS */
+// ============================================================
+// RECEIPT
+// ============================================================
 function pageReceiptSettings() {
   const main = $('#main');
   const r = state.settings.receipt;
@@ -1521,7 +1974,9 @@ ${r.footer}`.trim();
   render();
 }
 
-/* NOTIF SETTINGS */
+// ============================================================
+// NOTIF SETTINGS
+// ============================================================
 function pageNotifSettings() {
   const main = $('#main');
   const n = state.settings.notifications;
@@ -1543,7 +1998,9 @@ function pageNotifSettings() {
   });
 }
 
-/* SYNC SETTINGS */
+// ============================================================
+// SYNC SETTINGS
+// ============================================================
 function pageSyncSettings() {
   const main = $('#main');
   const render = () => {
@@ -1573,7 +2030,9 @@ function pageSyncSettings() {
   render();
 }
 
-/* THEME SETTINGS */
+// ============================================================
+// THEME SETTINGS
+// ============================================================
 function pageThemeSettings() {
   const main = $('#main');
   const render = () => {
@@ -1599,7 +2058,9 @@ function pageThemeSettings() {
   render();
 }
 
-/* PROFILE */
+// ============================================================
+// PROFILE
+// ============================================================
 function pageProfile() {
   const main = $('#main');
   main.innerHTML = `
@@ -1611,6 +2072,7 @@ function pageProfile() {
       <div class="field"><span>Nama</span><input type="text" value="${state.user.displayName}" disabled /></div>
       <div class="field"><span>Username</span><input type="text" value="${state.user.username}" disabled /></div>
       <div class="field"><span>Role</span><input type="text" value="${state.user.role === 'owner' ? 'Owner' : 'Cashier'}" disabled /></div>
+      ${state.user.role === 'cashier' ? `<div class="field"><span>Outlet</span><input type="text" value="${state.user.outlet || '-'}" disabled /></div>` : ''}
     </div>
     <div class="form-actions" style="margin-top:16px">
       <button class="btn btn-ghost btn-block" id="p-logout">Keluar</button>
@@ -1620,7 +2082,9 @@ function pageProfile() {
   $('#p-logout').onclick = handleLogout;
 }
 
-/* ABOUT */
+// ============================================================
+// ABOUT
+// ============================================================
 function pageAbout() {
   const main = $('#main');
   main.innerHTML = `
@@ -1638,7 +2102,9 @@ function pageAbout() {
   $('#back-home').onclick = backHome;
 }
 
-/* REPORTS */
+// ============================================================
+// REPORTS
+// ============================================================
 function renderReports(main) {
   let tab = 'summary';
   const TABS = [
@@ -1652,23 +2118,30 @@ function renderReports(main) {
   ];
 
   const render = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayStr();
     const monthPrefix = today.slice(0, 7);
     const todayTx = state.transactions.filter(t => t.date === today);
     const monthTx = state.transactions.filter(t => t.date.startsWith(monthPrefix));
     const tx = tab === 'monthly' ? monthTx : todayTx;
-    const sales = tx.reduce((s, t) => s + t.total, 0);
-    const cash = tx.filter(t => t.method === 'cash').reduce((s, t) => s + t.total, 0);
-    const qris = tx.filter(t => t.method === 'qris').reduce((s, t) => s + t.total, 0);
+
+    // Hitung bersih (kecuali void)
+    const completed = tx.filter(t => t.status === 'completed' || t.status === 'partial_refund' || t.status === 'refunded');
+    const active = tx.filter(t => t.status !== 'void');
+    const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const discount = tx.reduce((s, t) => s + (t.discount || 0), 0);
     const tax = tx.reduce((s, t) => s + (t.tax || 0), 0);
+    const voidAmount = tx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
+    const refundAmount = tx.reduce((s, t) => s + (t.refundAmount || 0), 0);
     const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
     const net = sales - expense;
     const gross = sales + discount;
+
     const byOutlet = {};
-    tx.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + t.total; });
+    active.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + (t.total - (t.refundAmount || 0)); });
     const byCashier = {};
-    tx.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + t.total; });
+    active.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + (t.total - (t.refundAmount || 0)); });
 
     main.innerHTML = `
       <div class="page-head">
@@ -1682,11 +2155,15 @@ function renderReports(main) {
         <div class="kpi-hero">
           <div class="label">Penjualan hari ini</div>
           <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${tx.length} transaksi</div>
+          <div class="delta">${active.length} transaksi</div>
         </div>
         <div class="kpi-compact">
           <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
           <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
+          <div><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
+          <div><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
+        </div>
+        <div class="kpi-compact">
           <div><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
           <div><div class="label">Laba bersih</div><div class="amount">${rupiah(net)}</div></div>
         </div>
@@ -1713,7 +2190,7 @@ function renderReports(main) {
           <div class="amount">${rupiah(sales)}</div>
         </div>
         <div class="kpi-compact">
-          <div><div class="label">Transaksi</div><div class="amount">${tx.length}</div></div>
+          <div><div class="label">Transaksi</div><div class="amount">${active.length}</div></div>
           <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
           <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
           <div><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
@@ -1723,7 +2200,7 @@ function renderReports(main) {
         <div class="kpi-hero">
           <div class="label">Penjualan bulan ini</div>
           <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${tx.length} transaksi</div>
+          <div class="delta">${active.length} transaksi</div>
         </div>
         <div class="kpi-compact">
           <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
@@ -1738,7 +2215,10 @@ function renderReports(main) {
           <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
           <div class="shift-row"><span class="lbl">Diskon</span><span class="val" style="color:var(--alert)">- ${rupiah(discount)}</span></div>
           <div class="shift-row"><span class="lbl">Pajak</span><span class="val" style="color:var(--alert)">- ${rupiah(tax)}</span></div>
-          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
+          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales + refundAmount)}</span></div>
+          ${voidAmount > 0 ? `<div class="shift-row"><span class="lbl">Void</span><span class="val" style="color:var(--alert)">- ${rupiah(voidAmount)}</span></div>` : ''}
+          ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
+          <div class="shift-row"><span class="lbl">Net (setelah void/refund)</span><span class="val">${rupiah(sales)}</span></div>
           <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
           <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
             <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
@@ -1851,7 +2331,9 @@ function expForm(id, CATS, onDone) {
   };
 }
 
-/* HEADER ACTIONS */
+// ============================================================
+// HEADER ACTIONS
+// ============================================================
 function updateSyncIndicator() {
   const dot = $('#sync-indicator .sync-dot');
   const banner = $('#offline-banner');
@@ -1906,9 +2388,10 @@ $('#sync-now-inline').onclick = () => {
 };
 
 $('#printer-indicator').onclick = () => {
-  if (state.user && state.user.role === 'owner') {
+  if (state.user.role === 'owner') {
     pagePrinterSettings();
   } else {
+    if (!hasPerm('printer')) return toast('Tidak ada akses printer', 'error');
     openSheet(`
       <h3 style="font-size:17px;margin-bottom:4px">Printer Bluetooth</h3>
       <p class="muted small" style="margin:0 0 16px">${state.settings.printer.connected ? 'Terhubung: ' + state.settings.printer.device : 'Belum ada printer terhubung'}</p>
@@ -1963,30 +2446,11 @@ $('#theme-btn').onclick = () => {
   toast(`Tema: ${next === 'dark' ? 'Gelap' : 'Terang'}`);
 };
 
-$('#outlet-chip').onclick = () => {
-  openSheet(`
-    <h3 style="font-size:17px;margin-bottom:12px">Pilih outlet</h3>
-    <div class="tx-list">
-      ${state.outlets.filter(o => o.active).map(o => `
-        <button class="list-row" data-outlet="${o.name}">
-          <div><div class="row-title">${o.name}</div><div class="row-sub">${o.address}</div></div>
-          ${state.outlet.name === o.name ? '<span style="color:var(--primary);font-weight:600">Aktif</span>' : ''}
-        </button>`).join('')}
-    </div>
-  `);
-  $$('[data-outlet]').forEach(b => b.onclick = () => {
-    const o = state.outlets.find(x => x.name === b.dataset.outlet);
-    state.outlet = o;
-    $('#outlet-name').textContent = o.name;
-    state.settings.receipt.bizName = o.name;
-    closeSheet();
-    toast('Outlet diganti: ' + o.name);
-  });
-};
-
 $('#sheet-backdrop').onclick = closeSheet;
 
-/* PRINT RECEIPT */
+// ============================================================
+// PRINT RECEIPT
+// ============================================================
 function printReceipt(tx) {
   const r = state.settings.receipt;
   const lines = [];
@@ -2009,6 +2473,9 @@ function printReceipt(tx) {
   lines.push(`Total           ${tx.total}`);
   if (r.showPayment) lines.push(`${tx.method === 'cash' ? 'Cash' : 'QRIS'}            ${tx.received || tx.total}`);
   if (r.showChange && tx.method === 'cash') lines.push(`Kembali         ${tx.change}`);
+  if (tx.status === 'void') lines.push(`*** VOID ***`);
+  if (tx.status === 'refunded') lines.push(`*** REFUND ***`);
+  if (tx.status === 'partial_refund') lines.push(`*** REFUND SEBAGIAN ***`);
   lines.push('─'.repeat(26));
   lines.push(r.footer);
   const text = lines.join('\n');
@@ -2030,5 +2497,7 @@ function printReceipt(tx) {
   $('#rc-print').onclick = () => { close(); toast('Struk terkirim ke printer', 'success'); };
 }
 
-/* INIT */
+// ============================================================
+// INIT
+// ============================================================
 updateSyncIndicator();
