@@ -1545,3 +1545,9 @@ textarea:focus-visible {
     max-width: none;
   }
 }
+
+/* ============================================================
+   FIX: [hidden] harus override display:flex
+   Tanpa ini, .sidebar & .sheet tetap tampil walau hidden
+   ============================================================ */
+[hidden] { display: none !important; }
