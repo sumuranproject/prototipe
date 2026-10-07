@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SakuKasir · Gallery</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #111;
+      font-family: -apple-system, sans-serif;
+      padding: 12px;
+      color: #fff;
+    }
+    .head { text-align: center; padding: 12px 0 20px; }
+    .head h1 { font-size: 18px; margin-bottom: 4px; }
+    .head p { font-size: 12px; color: #888; }
+
+    /* 1 kolom untuk tablet, 2 kolom untuk mobile */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .grid.mobile { grid-template-columns: 1fr 1fr; }
+    .grid.tablet { grid-template-columns: 1fr; }
+
+    .item {
+      background: #222;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .label {
+      padding: 6px 10px;
+      background: #0F5132;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .frame {
+      position: relative;
+      background: #FAFAF7;
+      overflow: hidden;
+    }
+    .frame iframe {
+      position: absolute;
+      top: 0; left: 0;
+      border: none;
+      transform-origin: top left;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="head">
+    <h1 id="title">SakuKasir · Gallery</h1>
+    <p id="count"></p>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    // ---- 1. Baca mode dari URL ----
+    // gallery.html              → mobile (390px)
+    // gallery.html?device=tablet → tablet (1024px)
+    const params = new URLSearchParams(location.search);
+    const device = params.get('device') || 'mobile';
+
+    const isTablet = device === 'tablet';
+    const FRAME_W = isTablet ? 1024 : 390;
+    const FRAME_H = isTablet ? 768 : 844;
+
+    document.getElementById('title').textContent = `SakuKasir · Gallery (${device})`;
+
+    // ---- 2. Daftar semua screen ----
+    const SCREENS = [
+      'login', 'register', 'forgot', 'setup',
+      'owner-pos', 'owner-pos-cart', 'owner-checkout',
+      'owner-reports', 'owner-reports-expenses', 'owner-reports-summary',
+      'manage', 'manage-products', 'manage-categories', 'manage-inventory',
+      'manage-outlets', 'manage-workers', 'manage-qris', 'manage-printer',
+      'manage-receipt', 'manage-notif', 'manage-sync', 'manage-security',
+      'manage-audit', 'manage-theme', 'manage-profile', 'manage-about',
+      'kasir-dashboard', 'kasir-pos', 'kasir-transactions', 'kasir-shift',
+      'modal-void', 'modal-refund', 'sheet-checkout', 'modal-confirm', 'success'
+    ];
+
+    const grid = document.getElementById('grid');
+    grid.classList.add(isTablet ? 'tablet' : 'mobile');
+    document.getElementById('count').textContent = SCREENS.length + ' screens · ' + device;
+
+    // ---- 3. Render semua iframe ----
+    SCREENS.forEach(name => {
+      const scale = (isTablet ? 1000 : 1000) / FRAME_W; // dummy, dihitung ulang di scaleAll
+      const item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML = `
+        <div class="label">${name}</div>
+        <div class="frame" data-w="${FRAME_W}" data-h="${FRAME_H}">
+          <iframe src="index.html?screen=${name}" loading="lazy"></iframe>
+        </div>
+      `;
+      grid.appendChild(item);
+    });
+
+    // ---- 4. Auto-scale semua iframe sesuai container ----
+    function scaleAll() {
+      document.querySelectorAll('.frame').forEach(f => {
+        const targetW = parseInt(f.dataset.w);
+        const targetH = parseInt(f.dataset.h);
+        const containerW = f.clientWidth;
+        const s = containerW / targetW;
+
+        f.style.height = (targetH * s) + 'px';
+
+        const iframe = f.querySelector('iframe');
+        if (iframe) {
+          iframe.style.width = targetW + 'px';
+          iframe.style.height = targetH + 'px';
+          iframe.style.transform = `scale(${s})`;
+        }
+      });
+    }
+
+    window.addEventListener('resize', scaleAll);
+    window.addEventListener('load', () => setTimeout(scaleAll, 200));
+    setTimeout(scaleAll, 500);
+  </script>
+
+</body>
+</html>
