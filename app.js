@@ -1,11 +1,10 @@
 // PERMISSIONS
 const PERMISSIONS = [
   { id: 'pos',          label: 'Kasir',              desc: 'Buat transaksi penjualan' },
-  { id: 'dashboard',    label: 'Dashboard',          desc: 'Ringkasan penjualan kasir' },
+  { id: 'dashboard',    label: 'Laporan',            desc: 'Ringkasan & riwayat transaksi sendiri' },
   { id: 'transactions', label: 'Transaksi',          desc: 'Lihat riwayat transaksi sendiri' },
   { id: 'shift',        label: 'Shift',              desc: 'Mulai & tutup shift' },
   { id: 'expense',      label: 'Pengeluaran',        desc: 'Catat & kelola pengeluaran' },
-  { id: 'void',         label: 'Void Transaksi',     desc: 'Batalkan transaksi sendiri' },
   { id: 'refund',       label: 'Refund Transaksi',   desc: 'Refund transaksi sendiri' },
   { id: 'printer',      label: 'Printer',            desc: 'Setup & cetak struk Bluetooth' },
   { id: 'sync',         label: 'Sinkronisasi',       desc: 'Status & manual sync' },
@@ -29,8 +28,8 @@ const state = {
   cart: [],
   activeShift: null,
   shiftHistory: [
-    { id: 'SH-041', start: '08:15', end: '16:30', opening: 200000, closing: 1085000, expected: 1085000, variance: 0, cash: 850000, qris: 420000, tx: 24 }
-  ],
+  { id: 'SH-041', start: '08:15', end: '16:30', opening: 200000, closing: 1085000, expected: 1085000, variance: 0, cash: 850000, qris: 420000, tx: 24, cashierId: 'kasir', cashierName: 'Andi Wijaya', outlet: 'Toko Berkah' }
+],
   auditLog: [],
   activeView: 'pos',
   ownerTab: 'pos',
@@ -66,7 +65,7 @@ const state = {
   ],
   workers: [
     { id: 1, username: 'kasir', displayName: 'Andi Wijaya', outlet: 'Toko Berkah', whatsapp: '0812-5555-6666', active: true, password: 'kasir123',
-      permissions: ['pos','dashboard','transactions','shift','expense','void','refund','printer','sync','theme','profile'] },
+      permissions: ['pos','dashboard','transactions','shift','expense','refund','printer','sync','theme','profile'] },
     { id: 2, username: 'kasir2', displayName: 'Siti Aminah', outlet: 'Cabang Pasar', whatsapp: '0812-7777-8888', active: true, password: 'kasir123',
       permissions: ['pos','transactions','shift','printer','sync','theme','profile'] },
     { id: 3, username: 'kasir3', displayName: 'Rudi Hartono', outlet: 'Toko Berkah', whatsapp: '', active: false, password: 'kasir123',
@@ -273,7 +272,9 @@ function tryCloseSomething() {
     if (state.ownerTab === 'manage') { state.ownerTab = 'pos'; renderNav(); renderMain(); return true; }
     if (state.ownerTab !== 'pos') { state.ownerTab = 'pos'; renderNav(); renderMain(); return true; }
   } else {
-    const defaultView = hasPerm('pos') ? 'pos' : (hasPerm('dashboard') ? 'dashboard' : (hasPerm('transactions') ? 'transactions' : 'shift'));
+    if (state.manageRoute) { state.manageRoute = null; renderMain(); return true; }
+    if (state.activeView === 'manage') { state.activeView = 'pos'; renderNav(); renderMain(); return true; }
+    const defaultView = hasPerm('pos') ? 'pos' : (hasPerm('dashboard') ? 'dashboard' : 'pos');
     if (state.activeView !== defaultView) { state.activeView = defaultView; renderNav(); renderMain(); return true; }
   }
   return false;
@@ -283,7 +284,7 @@ window.addEventListener('popstate', () => {
 });
 window.addEventListener('load', () => { pushNav(); });
 
-// SHEET / MODAL
+// SHEET MODAL
 function openSheet(html) {
   const wasHidden = $('#sheet').hidden;
   $('#sheet-content').innerHTML = html;
@@ -384,6 +385,7 @@ function pinModal(title, hint, onConfirm) {
   pushNav();
 }
 
+// THEME
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('sk-theme', t);
@@ -391,6 +393,7 @@ function applyTheme(t) {
 }
 applyTheme(state.theme);
 
+// AUDIT NOTIF
 function pushAudit(type, data) {
   const entry = {
     id: uid('AUD'),
@@ -408,6 +411,8 @@ function pushNotif(type, title, body) {
   state.notifications.unshift({ id: Date.now(), type, title, body, time: nowTime(), read: false });
   $('#notif-dot').style.display = '';
 }
+
+// IMAGE VIEWER
 function imageViewer(src) {
   const host = document.createElement('div');
   host.className = 'image-viewer-bd';
@@ -421,6 +426,8 @@ function imageViewer(src) {
   host.onclick = (e) => { if (e.target === host || e.target.closest('.close-x')) close(); };
   pushNav();
 }
+
+// QRIS PROOF
 function captureQrisProof(callback) {
   const input = document.createElement('input');
   input.type = 'file';
@@ -445,14 +452,14 @@ function captureQrisProof(callback) {
   input.click();
 }
 
-// AUTH
+// AUTH VIEW
 function showView(id) {
   $$('.view').forEach(v => v.classList.remove('active'));
   $('#' + id).classList.add('active');
   window.scrollTo(0, 0);
 }
 
-// Eye toggle
+// EYE TOGGLE
 function bindEyeToggles() {
   $$('.eye-btn').forEach(btn => {
     btn.onclick = (e) => {
@@ -470,7 +477,7 @@ function bindEyeToggles() {
 }
 bindEyeToggles();
 
-// Nav auth dengan guard (biar tidak crash kalau ID tidak ada)
+// NAV AUTH
 const _sr = $('#show-register'); if (_sr) _sr.onclick = () => showView('view-register');
 const _sf = $('#show-forgot');   if (_sf) _sf.onclick = () => showView('view-forgot');
 const _sl = $('#show-login');    if (_sl) _sl.onclick = () => showView('view-login');
@@ -611,14 +618,13 @@ $('#forgot-form').addEventListener('submit', (e) => {
   setTimeout(() => showView('view-login'), 900);
 });
 
+// ENTER APP
 function enterApp() {
   showView('view-app');
   state.manageRoute = null;
   if (state.user.role === 'cashier') {
     if (hasPerm('pos')) state.activeView = 'pos';
     else if (hasPerm('dashboard')) state.activeView = 'dashboard';
-    else if (hasPerm('transactions')) state.activeView = 'transactions';
-    else if (hasPerm('shift')) state.activeView = 'shift';
     else state.activeView = 'pos';
   } else {
     state.ownerTab = 'pos';
@@ -629,12 +635,32 @@ function enterApp() {
   renderOutletChip();
   renderTabletSidebar();
 }
+
+// LOGOUT
 function handleLogout() {
-  if (state.activeShift) {
-    confirmModal('Shift masih aktif', 'Tutup shift dulu sebelum keluar. Kalau tetap keluar, shift akan tercatat sebagai anomali.', 'Tetap keluar', doLogout);
-  } else {
-    confirmModal('Keluar dari SakuKasir?', 'Kamu perlu login lagi untuk masuk.', 'Keluar', doLogout, false);
+  if (state.user && state.user.role === 'cashier' && state.activeShift) {
+    return confirmModal(
+      'Shift masih aktif',
+      'Anda harus menutup shift dulu sebelum bisa keluar. Buka halaman Kasir, tap banner shift di atas, lalu tutup shift.',
+      'OK, buka Kasir',
+      () => {
+        state.activeView = 'pos';
+        renderNav();
+        renderMain();
+      },
+      false
+    );
   }
+  if (state.activeShift) {
+    return confirmModal(
+      'Shift masih aktif',
+      'Masih ada shift kasir yang belum ditutup. Pastikan semua shift sudah tutup sebelum keluar.',
+      'OK',
+      () => {},
+      false
+    );
+  }
+  confirmModal('Keluar dari SakuKasir?', 'Kamu perlu login lagi untuk masuk.', 'Keluar', doLogout, false);
 }
 function doLogout() {
   state.user = null;
@@ -651,7 +677,8 @@ function doLogout() {
 function renderNav() {
   const nav = $('#bottom-nav');
   if (!state.user) { nav.innerHTML = ''; return; }
-  const isManage = state.user.role === 'owner' && state.ownerTab === 'manage';
+  const isManage = (state.user.role === 'owner' && state.ownerTab === 'manage')
+              || (state.user.role === 'cashier' && state.activeView === 'manage');
   if (isManage) {
     nav.classList.add('hidden');
     nav.innerHTML = '';
@@ -661,15 +688,14 @@ function renderNav() {
   nav.classList.remove('hidden');
   if (state.user.role === 'cashier') {
     const items = [];
-    if (hasPerm('dashboard'))    items.push(navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>'));
     if (hasPerm('pos'))          items.push(navItem('pos', 'Kasir', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
-    if (hasPerm('transactions')) items.push(navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>'));
-    if (hasPerm('shift'))        items.push(navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'));
+    if (hasPerm('pos'))          items.push(navItem('checkout', 'Checkout', '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
+    if (hasPerm('dashboard'))    items.push(navItem('dashboard', 'Laporan', '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>'));
     nav.innerHTML = items.length ? items.join('') : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
   } else {
     nav.innerHTML = `
       ${navItem('pos', 'Kasir',
-        '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>')}
+        '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
       ${navItem('checkout', 'Checkout',
         '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>')}
       ${navItem('reports', 'Laporan',
@@ -707,7 +733,6 @@ function renderMain() {
   $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
   if (!state.user) return;
 
-  // Safety net — sidebar selalu sinkron
   requestAnimationFrame(() => {
     if (typeof renderTabletSidebar === 'function') renderTabletSidebar();
   });
@@ -725,9 +750,7 @@ function renderMain() {
   if (v === 'reports')      return renderReports(main);
 }
 
-// ============================================================
 // TABLET SIDEBAR
-// ============================================================
 function renderTabletSidebar() {
   const sb = $('#tablet-sidebar');
   if (!sb) return;
@@ -739,15 +762,14 @@ function renderTabletSidebar() {
 
   const navItems = isOwner
     ? [
-        { id: 'pos', label: 'Kasir', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>' },
+        { id: 'pos', label: 'Kasir', icon: '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>' },
         { id: 'checkout', label: 'Checkout', icon: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>' },
         { id: 'reports', label: 'Laporan', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
       ]
     : [
-        hasPerm('dashboard')    && { id: 'dashboard', label: 'Dashboard', icon: '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>' },
         hasPerm('pos')          && { id: 'pos', label: 'Kasir', icon: '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>' },
-        hasPerm('transactions') && { id: 'transactions', label: 'Transaksi', icon: '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>' },
-        hasPerm('shift')        && { id: 'shift', label: 'Shift', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
+        hasPerm('pos')          && { id: 'checkout', label: 'Checkout', icon: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>' },
+        hasPerm('dashboard')    && { id: 'dashboard', label: 'Laporan', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
       ].filter(Boolean);
 
   const brandSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/><rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/><circle cx="17" cy="15" r="1.6" fill="var(--primary)"/></svg>`;
@@ -788,12 +810,10 @@ function renderTabletSidebar() {
         ${unread > 0 ? '<span class="badge-dot"></span>' : ''}
         <span>Notifikasi</span>
       </button>
-      ${isOwner ? `
-        <button class="ts-action" id="ts-manage" title="Kelola">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h16"/><path d="M4 12h16"/><path d="M4 20.5h11"/></svg>
-          <span>Kelola</span>
-        </button>
-      ` : ''}
+      <button class="ts-action" id="ts-manage" title="Kelola">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h16"/><path d="M4 12h16"/><path d="M4 20.5h11"/></svg>
+        <span>Kelola</span>
+      </button>
     </div>
 
     <div class="ts-spacer"></div>
@@ -810,7 +830,6 @@ function renderTabletSidebar() {
     </div>
   `;
 
-  // EVENT DELEGATION — 1 handler untuk semua klik di sidebar
   sb.onclick = (e) => {
     const navBtn = e.target.closest('.ts-nav-item');
     if (navBtn) {
@@ -877,8 +896,50 @@ function renderOutletChip() {
 
 // POS
 function renderPOS(main) {
+  if (state.user.role === 'cashier' && !state.activeShift) {
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Kasir</h2><div class="sub">Mulai shift dulu untuk transaksi</div></div>
+      </div>
+      <div class="empty" style="padding-top:60px">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+        <div class="empty-title">Shift belum dimulai</div>
+        <div class="empty-sub">Anda harus mulai shift dan mengisi kas awal sebelum bisa membuat transaksi.</div>
+        <button class="btn btn-primary" id="start-shift-from-pos">Mulai Shift Sekarang</button>
+      </div>
+    `;
+    $('#start-shift-from-pos').onclick = () => {
+      promptModal('Mulai shift', 'Kas awal (Rp)', '200000', v => {
+        state.activeShift = {
+          id: uid('SH'), startTime: nowTime(),
+          openingCash: parseInt(v) || 0,
+          transactions: 0, cashSales: 0, qrisSales: 0,
+        };
+        toast('Shift dimulai', 'success');
+        renderMain();
+      });
+    };
+    return;
+  }
+
+  const s = state.activeShift;
+  const shiftBanner = s ? `
+    <button class="shift-banner" id="pos-shift-banner">
+      <span class="sync-dot" data-status="synced"></span>
+      <div style="flex:1;min-width:0;text-align:left">
+        <div style="font-weight:600;font-size:13px;color:var(--text)">Shift aktif · ${s.startTime}</div>
+        <div class="muted small">${s.transactions} transaksi · ${rupiah(s.cashSales + s.qrisSales)}</div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  ` : '';
+
   const cats = ['Semua', ...state.categories.filter(c => c.active).map(c => c.name)];
   main.innerHTML = `
+    ${shiftBanner}
     <div class="pos-search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" placeholder="Cari produk…" id="pos-search-input" />
@@ -888,6 +949,9 @@ function renderPOS(main) {
     </div>
     <div class="product-grid" id="product-grid"></div>
   `;
+
+  if ($('#pos-shift-banner')) $('#pos-shift-banner').onclick = () => openShiftDetailSheet();
+
   renderProductGrid();
   $('#pos-search-input').oninput = renderProductGrid;
   $$('#cat-row .chip').forEach(chip => {
@@ -982,10 +1046,73 @@ function renderCartBar() {
       <div class="cart-count">${count} item</div>
       <div class="cart-total">${rupiah(total)}</div>
     </div>
-    <span class="cart-cta">Bayar</span>
+    <span class="cart-cta">Checkout</span>
   `;
-  bar.onclick = () => openCheckout();
+  bar.onclick = () => {
+    state.activeView = 'checkout';
+    pushNav();
+    renderNav();
+    renderMain();
+  };
   document.body.appendChild(bar);
+}
+
+// SHIFT SHEET
+function openShiftDetailSheet() {
+  const s = state.activeShift;
+  if (!s) return;
+
+  openSheet(`
+    <h3 style="font-size:17px;margin-bottom:4px">Shift aktif</h3>
+    <p class="muted small" style="margin:0 0 16px">Mulai ${s.startTime} · ${state.user.displayName}</p>
+
+    <div class="shift-rows">
+      <div class="shift-row"><span class="lbl">Kas awal</span><span class="val">${rupiah(s.openingCash)}</span></div>
+      <div class="shift-row"><span class="lbl">Transaksi</span><span class="val">${s.transactions}</span></div>
+      <div class="shift-row"><span class="lbl">Cash</span><span class="val">${rupiah(s.cashSales)}</span></div>
+      <div class="shift-row"><span class="lbl">QRIS</span><span class="val">${rupiah(s.qrisSales)}</span></div>
+      <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(s.cashSales + s.qrisSales)}</span></div>
+      <div class="shift-row expected"><span class="lbl">Expected cash</span><span class="val">${rupiah(s.openingCash + s.cashSales)}</span></div>
+    </div>
+
+    <div style="display:grid;gap:8px;margin-top:16px">
+      <button class="btn btn-primary btn-block" id="open-close-shift">Tutup shift</button>
+    </div>
+  `);
+
+  $('#open-close-shift').onclick = () => openCloseShiftSheet(s);
+}
+
+// SHIFT CLOSE SHEET
+function openCloseShiftSheet(s) {
+  const expected = s.openingCash + s.cashSales;
+  openSheet(`
+    <h3 style="font-size:17px;margin-bottom:4px">Tutup shift</h3>
+    <p class="muted small" style="margin:0 0 16px">Hitung uang fisik, lalu masukkan jumlahnya.</p>
+    <div class="summary-row"><span>Expected cash</span><span>${rupiah(expected)}</span></div>
+    <label class="field" style="margin:12px 0"><span>Uang fisik (Rp)</span>
+      <input type="text" inputmode="numeric" id="close-cash" value="${expected.toLocaleString('id-ID')}" /></label>
+    <button class="btn btn-primary btn-block" id="do-close">Tutup shift</button>
+  `);
+  bindRupiahInput('#close-cash', () => {});
+  $('#do-close').onclick = () => {
+    const closing = parseRupiahInput($('#close-cash').value);
+    const variance = closing - expected;
+    state.shiftHistory.unshift({
+  id: s.id, start: s.startTime, end: nowTime(),
+  opening: s.openingCash, closing, expected, variance,
+  cash: s.cashSales, qris: s.qrisSales, tx: s.transactions,
+  cashierId: state.user.username,
+  cashierName: state.user.displayName,
+  outlet: state.user.outlet || state.outlet.name,
+});
+    state.activeShift = null;
+    closeSheet();
+    const vText = variance === 0 ? 'Pas, tidak ada selisih.'
+      : variance > 0 ? `Lebih ${rupiah(variance)}.`
+      : `Kurang ${rupiah(Math.abs(variance))}.`;
+    confirmModal('Shift ditutup', vText, 'OK', () => renderMain(), false);
+  };
 }
 
 // CHECKOUT SHEET
@@ -1162,6 +1289,7 @@ function openCheckout() {
   render();
 }
 
+// QRIS CAPTURE MODAL
 function showQrisCaptureModal(onConfirm) {
   const host = $('#modal-host');
   host.innerHTML = `
@@ -1189,6 +1317,7 @@ function showQrisCaptureModal(onConfirm) {
   pushNav();
 }
 
+// SUCCESS
 function showSuccess(tx) {
   const main = $('#main');
   const nav = $('#bottom-nav');
@@ -1273,7 +1402,9 @@ function renderCheckout(main) {
   `;
 
   if ($('#go-pos')) $('#go-pos').onclick = () => {
-    state.ownerTab = 'pos'; pushNav(); renderNav(); renderMain();
+    if (state.user.role === 'owner') state.ownerTab = 'pos';
+    else state.activeView = 'pos';
+    pushNav(); renderNav(); renderMain();
   };
   if ($('#clear-cart-page')) $('#clear-cart-page').onclick = () => {
     confirmModal('Kosongkan cart?', 'Semua item akan dihapus.', 'Kosongkan', () => {
@@ -1359,14 +1490,18 @@ function renderTxItem(tx) {
       ${refundNote}
     </button>`;
 }
+
+// TX DETAIL
 function showTxDetail(id) {
   const tx = state.transactions.find(t => t.id === id);
   if (!tx) return;
   const isOwner = state.user.role === 'owner';
-  const isToday = tx.date === todayStr();
   const isMyTx = tx.cashierId === state.user.username;
-  const canVoidBase = tx.status === 'completed' && (isOwner || isToday);
-  const canVoid = canVoidBase && (isOwner || (isMyTx && hasPerm('void')));
+
+  // void hanya owner
+  const canVoid = tx.status === 'completed' && isOwner;
+
+  // refund: owner atau kasir (dengan limit + PIN owner kalau melebihi)
   const canRefund = (tx.status === 'completed' || tx.status === 'partial_refund') &&
     (isOwner || (isMyTx && hasPerm('refund')));
 
@@ -1454,18 +1589,9 @@ function showTxDetail(id) {
 
 // VOID
 function openVoidSheet(tx) {
+  if (state.user.role !== 'owner') return toast('Hanya owner yang bisa void transaksi', 'error');
+
   const REASONS = ['Salah input', 'Customer batal', 'Double entry', 'Lainnya'];
-  const isOwner = state.user.role === 'owner';
-  const sec = state.settings.security;
-  const withinWindow = isWithinVoidWindow(tx);
-  const exceedsLimit = tx.total > sec.voidLimitCashier;
-
-  if (!isOwner && !withinWindow) {
-    return confirmModal('Void tidak bisa',
-      `Window void kasir hanya ${sec.voidWindowMinutes} menit pertama. Transaksi ini sudah ${txAgeMinutes(tx)} menit. Hubungi owner.`,
-      'OK', () => {}, false);
-  }
-
   let reason = REASONS[0];
 
   const proceedVoid = (finalReason) => {
@@ -1489,11 +1615,6 @@ function openVoidSheet(tx) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
         <div>Void tidak menghapus transaksi dari riwayat. Transaksi akan ditandai VOID dan tidak dihitung di penjualan.</div>
       </div>
-      ${!isOwner && exceedsLimit ? `
-        <div class="status-banner void" style="background:var(--warn-soft);color:var(--warn)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
-          <div>Nominal transaksi (${rupiah(tx.total)}) melebihi limit kasir (${rupiah(sec.voidLimitCashier)}). Butuh PIN owner.</div>
-        </div>` : ''}
       <div class="section-title" style="margin-top:0">Alasan void</div>
       <div class="reason-grid" id="void-reasons">
         ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
@@ -1516,13 +1637,7 @@ function openVoidSheet(tx) {
         if (!note) return toast('Keterangan wajib diisi', 'error');
         finalReason = note;
       }
-      if (!isOwner && exceedsLimit) {
-        pinModal('PIN Owner', `Nominal ${rupiah(tx.total)} melebihi limit. Masukkan PIN owner.`, () => {
-          proceedVoid(finalReason + ' [PIN owner]');
-        });
-      } else {
-        proceedVoid(finalReason);
-      }
+      proceedVoid(finalReason);
     };
   };
   render();
@@ -1666,7 +1781,7 @@ function openRefundSheet(tx) {
   render();
 }
 
-// SHIFT
+// SHIFT PAGE (standalone, tidak jadi nav item)
 function renderShift(main) {
   const s = state.activeShift;
   main.innerHTML = `
@@ -1680,7 +1795,6 @@ function renderShift(main) {
           <div class="shift-row"><span class="lbl">Transaksi</span><span class="val">${s.transactions}</span></div>
           <div class="shift-row"><span class="lbl">Cash</span><span class="val">${rupiah(s.cashSales)}</span></div>
           <div class="shift-row"><span class="lbl">QRIS</span><span class="val">${rupiah(s.qrisSales)}</span></div>
-          <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(s.cashSales + s.qrisSales)}</span></div>
           <div class="shift-row expected"><span class="lbl">Expected cash</span><span class="val">${rupiah(s.openingCash + s.cashSales)}</span></div>
         </div>
         <button class="btn btn-primary btn-block" id="close-shift" style="margin-top:8px">Tutup shift</button>
@@ -1689,8 +1803,7 @@ function renderShift(main) {
       <div class="empty">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         <div class="empty-title">Belum ada shift aktif</div>
-        <div class="empty-sub">Mulai shift untuk mencatat kas awal dan transaksi.</div>
-        <button class="btn btn-primary" id="start-shift">Mulai shift</button>
+        <div class="empty-sub">Mulai shift dari halaman Kasir.</div>
       </div>
     `}
     <div class="section-title">Riwayat shift</div>
@@ -1703,73 +1816,32 @@ function renderShift(main) {
         </div>`).join('')}
     </div>
   `;
-  if ($('#start-shift')) {
-    $('#start-shift').onclick = () => {
-      promptModal('Mulai shift', 'Kas awal (Rp)', '200000', v => {
-        state.activeShift = {
-          id: uid('SH'), startTime: nowTime(),
-          openingCash: parseInt(v) || 0,
-          transactions: 0, cashSales: 0, qrisSales: 0,
-        };
-        renderMain();
-        toast('Shift dimulai', 'success');
-      });
-    };
-  }
-  if ($('#close-shift')) {
-    $('#close-shift').onclick = () => {
-      const expected = s.openingCash + s.cashSales;
-      openSheet(`
-        <h3 style="font-size:17px;margin-bottom:4px">Tutup shift</h3>
-        <p class="muted small" style="margin:0 0 16px">Hitung uang fisik, lalu masukkan jumlahnya.</p>
-        <div class="summary-row"><span>Expected cash</span><span>${rupiah(expected)}</span></div>
-        <label class="field" style="margin:12px 0"><span>Uang fisik (Rp)</span>
-          <input type="text" inputmode="numeric" id="close-cash" value="${expected.toLocaleString('id-ID')}" /></label>
-        <button class="btn btn-primary btn-block" id="do-close">Tutup shift</button>
-      `);
-      bindRupiahInput('#close-cash', () => {});
-      $('#do-close').onclick = () => {
-        const closing = parseRupiahInput($('#close-cash').value);
-        const variance = closing - expected;
-        state.shiftHistory.unshift({
-          id: s.id, start: s.startTime, end: nowTime(),
-          opening: s.openingCash, closing, expected, variance,
-          cash: s.cashSales, qris: s.qrisSales, tx: s.transactions,
-        });
-        state.activeShift = null;
-        closeSheet();
-        const vText = variance === 0 ? 'Pas, tidak ada selisih.'
-          : variance > 0 ? `Lebih ${rupiah(variance)}.`
-          : `Kurang ${rupiah(Math.abs(variance))}.`;
-        confirmModal('Shift ditutup', vText, 'OK', () => renderMain(), false);
-      };
-    };
-  }
+  if ($('#close-shift')) $('#close-shift').onclick = () => openCloseShiftSheet(s);
 }
 
-// ============================================================
-// DASHBOARD (REVISED: growth vs kemarin + kpiAmountHTML)
-// ============================================================
+// DASHBOARD / LAPORAN KASIR
 function renderDashboard(main) {
   const today = todayStr();
   const yDate = new Date(); yDate.setDate(yDate.getDate() - 1);
   const yesterday = dateStr(yDate);
 
-  const todayTx = state.transactions.filter(t => t.date === today);
+  const myTxs = state.transactions.filter(t => t.cashierId === state.user.username);
+  const todayTx = myTxs.filter(t => t.date === today);
   const active = todayTx.filter(t => t.status !== 'void');
+
   const totalSales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+  const voidAmount = todayTx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
+  const refundAmount = todayTx.reduce((s, t) => s + (t.refundAmount || 0), 0);
 
-  // Growth vs kemarin
-  const yTx = state.transactions.filter(t => t.date === yesterday && t.status !== 'void');
+  const yTx = myTxs.filter(t => t.date === yesterday && t.status !== 'void');
   const ySales = yTx.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const growth = computeGrowth(totalSales, ySales);
 
   main.innerHTML = `
     <div class="page-head">
-      <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
-        <div class="sub">Ringkasan shift kamu</div></div>
+      <div><h2>Laporan</h2><div class="sub">Ringkasan & riwayat hari ini</div></div>
     </div>
 
     <div class="kpi-hero">
@@ -1790,6 +1862,8 @@ function renderDashboard(main) {
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Cash</div><div class="amount">${kpiAmountHTML(cash)}</div></div>
       <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${kpiAmountHTML(qris)}</div></div>
+      <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${kpiAmountHTML(voidAmount)}</div></div>
+      <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${kpiAmountHTML(refundAmount)}</div></div>
     </div>
 
     ${state.activeShift ? `
@@ -1797,20 +1871,24 @@ function renderDashboard(main) {
         <div class="shift-status">Shift aktif</div>
         <div class="muted small">Mulai ${state.activeShift.startTime}</div>
         <div class="shift-rows">
-          <div class="shift-row"><span class="lbl">Transaksi</span><span class="val">${state.activeShift.transactions}</span></div>
-          <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(state.activeShift.cashSales + state.activeShift.qrisSales)}</span></div>
+          <div class="shift-row"><span class="lbl">Transaksi shift ini</span><span class="val">${state.activeShift.transactions}</span></div>
+          <div class="shift-row"><span class="lbl">Cash</span><span class="val">${rupiah(state.activeShift.cashSales)}</span></div>
+          <div class="shift-row"><span class="lbl">QRIS</span><span class="val">${rupiah(state.activeShift.qrisSales)}</span></div>
+          <div class="shift-row expected"><span class="lbl">Total</span><span class="val">${rupiah(state.activeShift.cashSales + state.activeShift.qrisSales)}</span></div>
         </div>
       </div>` : ''}
 
-    <div class="section-title">Transaksi terbaru</div>
-    <div class="tx-list">${todayTx.slice(0, 5).map(renderTxItem).join('') || '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}</div>
+    <div class="section-title">Riwayat Transaksi Hari Ini (${todayTx.length})</div>
+    <div class="tx-list">
+      ${todayTx.length
+        ? todayTx.map(renderTxItem).join('')
+        : '<div class="empty"><div class="empty-title">Belum ada transaksi hari ini</div><div class="empty-sub">Transaksi yang kamu buat hari ini akan muncul di sini.</div></div>'}
+    </div>
   `;
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
-// ============================================================
-// REPORTS (REVISED: growth + method-progress + expenses hero)
-// ============================================================
+// REPORTS OWNER
 function renderReports(main) {
   let tab = 'transactions';
   const TABS = [
@@ -1827,7 +1905,6 @@ function renderReports(main) {
     const range = periodRange(rf.period, rf.dateFrom, rf.dateTo);
     const prevRange = getPrevPeriodRange(rf.period, rf.dateFrom, rf.dateTo);
 
-    // ---- Current period ----
     const allInPeriod = state.transactions.filter(t => t.date >= range.from && t.date <= range.to);
     const userList = allInPeriod.filter(t => rf.user === 'all' ? true : t.cashierId === rf.user);
 
@@ -1848,7 +1925,6 @@ function renderReports(main) {
     const net = sales - expenseInPeriod;
     const gross = sales + discount;
 
-    // ---- Previous period (untuk growth) ----
     const prevAll = state.transactions.filter(t => t.date >= prevRange.from && t.date <= prevRange.to);
     const prevUser = prevAll.filter(t => rf.user === 'all' ? true : t.cashierId === rf.user);
     const prevActive = prevUser.filter(t => t.status !== 'void');
@@ -1861,14 +1937,12 @@ function renderReports(main) {
     const salesGrowth = computeGrowth(sales, prevSales);
     const expenseGrowth = computeGrowth(expenseInPeriod, prevExpense);
 
-    // ---- Breakdown pengeluaran per kategori ----
     const expenseCats = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
     const expenseByCat = expenseCats.map(cat => ({
       cat,
       total: expensesInPeriod.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0),
     }));
 
-    // ---- Chart 7 hari ----
     const last7 = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -1881,7 +1955,6 @@ function renderReports(main) {
     }
     const maxDay = Math.max(...last7.map(d => d.total), 1);
 
-    // ---- Rekap kasir ----
     const cashierRecap = {};
     userList.forEach(t => {
       const k = t.cashier;
@@ -1922,14 +1995,12 @@ function renderReports(main) {
         `).join('')}
       </div>
 
-      ${/* ===== TAB: TRANSAKSI ===== */ ''}
       ${tab === 'transactions' ? `
         <div class="tx-list">
           ${userList.length ? userList.map(renderTxItem).join('') : '<div class="empty"><div class="empty-title">Belum ada transaksi</div><div class="empty-sub">Coba ubah filter atau periode.</div></div>'}
         </div>
       ` : ''}
 
-      ${/* ===== TAB: PENGELUARAN ===== */ ''}
       ${tab === 'expenses' ? `
         <div class="kpi-hero">
           <div class="label">Total Pengeluaran · ${periodText}</div>
@@ -1968,7 +2039,6 @@ function renderReports(main) {
         </div>
       ` : ''}
 
-      ${/* ===== TAB: LAPORAN ===== */ ''}
       ${tab === 'reports' ? `
         <div class="report-summary-grid">
           <div class="kpi-hero">
@@ -2197,6 +2267,59 @@ function renderManage() {
     return routeManage(state.manageRoute);
   }
 
+  if (state.user.role === 'cashier') {
+    const groups = [
+      { title: 'Keuangan', items: [
+        hasPerm('expense') && { label: 'Pengeluaran', sub: 'Catat pengeluaran harian', route: 'cashier-expenses' },
+      ].filter(Boolean) },
+      { title: 'Perangkat', items: [
+        hasPerm('printer') && { label: 'Printer', sub: 'Printer Bluetooth struk', route: 'cashier-printer' },
+        hasPerm('sync')    && { label: 'Sinkronisasi', sub: 'Status & queue', route: 'cashier-sync' },
+      ].filter(Boolean) },
+      { title: 'Akun', items: [
+        hasPerm('theme')   && { label: 'Tema', sub: state.theme === 'dark' ? 'Mode gelap' : 'Mode terang', route: 'cashier-theme' },
+        hasPerm('profile') && { label: 'Profil', sub: 'Info akun kamu', route: 'cashier-profile' },
+      ].filter(Boolean) },
+    ].filter(g => g.items.length > 0);
+
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Kelola</h2><div class="sub">Menu kasir</div></div>
+        <button class="manage-logout-btn" id="manage-logout">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+          Keluar
+        </button>
+      </div>
+
+      ${groups.length ? groups.map(g => `
+        <div class="section-title">${g.title}</div>
+        <div class="manage-grid">
+          ${g.items.map(it => `
+            <button class="manage-card" data-route="${it.route}">
+              <div class="manage-card-main">
+                <div class="row-title">${it.label}</div>
+                <div class="row-sub">${it.sub}</div>
+              </div>
+              <div class="manage-card-meta">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+            </button>
+          `).join('')}
+        </div>
+      `).join('') : '<div class="empty"><div class="empty-title">Tidak ada akses</div><div class="empty-sub">Hubungi owner untuk mengaktifkan fitur.</div></div>'}
+    `;
+
+    $('#manage-logout').onclick = handleLogout;
+    $$('[data-route]').forEach(el => {
+      el.onclick = () => {
+        state.manageRoute = el.dataset.route;
+        pushNav();
+        renderMain();
+      };
+    });
+    return;
+  }
+
   const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
   const outCount = state.products.filter(p => p.track && p.stock === 0).length;
   const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
@@ -2210,6 +2333,7 @@ function renderManage() {
     { title: 'Bisnis', items: [
       { label: 'Outlet', sub: 'Cabang & lokasi toko', route: 'outlets', count: state.outlets.length },
       { label: 'Kasir', sub: 'Akun & hak akses', route: 'workers', count: state.workers.length },
+      { label: 'Shift', sub: 'Riwayat shift karyawan', route: 'shift-history', count: state.shiftHistory.length },
     ]},
     { title: 'Pengaturan', items: [
       { label: 'QRIS', sub: 'Metode pembayaran QR', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
@@ -2264,13 +2388,14 @@ function renderManage() {
   });
 }
 
-// ROUTER SUB-MANAGE
+// MANAGE ROUTER
 function routeManage(route) {
   if (route === 'products') return pageProducts();
   if (route === 'categories') return pageCategories();
   if (route === 'inventory') return pageInventory();
   if (route === 'outlets') return pageOutlets();
   if (route === 'workers') return pageWorkers();
+  if (route === 'shift-history') return pageShiftHistory();
   if (route === 'qris') return pageQRIS();
   if (route === 'printer') return pagePrinterSettings();
   if (route === 'receipt') return pageReceiptSettings();
@@ -2664,7 +2789,7 @@ function workerForm(id) {
   const isEdit = !!w;
   const data = w || {
     username: '', displayName: '', outlet: state.outlets[0]?.name || '', whatsapp: '', active: true, password: '',
-    permissions: ['pos','transactions','shift','printer','theme','profile'],
+    permissions: ['pos','dashboard','shift','printer','theme','profile'],
   };
   const currentPerms = data.permissions || [];
 
@@ -2745,6 +2870,109 @@ function workerForm(id) {
     pageWorkers();
     toast(isEdit ? 'Kasir diperbarui' : 'Kasir ditambahkan', 'success');
   };
+}
+
+// SHIFT HISTORY OWNER
+function pageShiftHistory() {
+  const main = $('#main');
+  let filterCashier = 'all';
+  let filterPeriod = 'all';
+
+  const render = () => {
+    const range = periodRange(filterPeriod, '', '');
+    const filtered = state.shiftHistory.filter(s => {
+      if (filterCashier !== 'all' && s.cashierId !== filterCashier) return false;
+      if (filterPeriod !== 'all') {
+        const shiftDate = s.startDate || todayStr();
+        if (shiftDate < range.from || shiftDate > range.to) return false;
+      }
+      return true;
+    });
+
+    const totalSales = filtered.reduce((s, sh) => s + sh.cash + sh.qris, 0);
+    const totalVariance = filtered.reduce((s, sh) => s + sh.variance, 0);
+    const totalCash = filtered.reduce((s, sh) => s + sh.cash, 0);
+    const totalQris = filtered.reduce((s, sh) => s + sh.qris, 0);
+
+    const cashierOptions = [
+      { id: 'all', label: 'Semua kasir' },
+      ...state.workers.map(w => ({ id: w.username, label: w.displayName })),
+    ];
+
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Riwayat Shift</h2><div class="sub">${filtered.length} shift tercatat</div></div>
+        ${backToManageBtn()}
+      </div>
+
+      <div class="kpi-hero">
+        <div class="label">Total penjualan semua shift</div>
+        <div class="amount">${rupiah(totalSales)}</div>
+        <div class="delta">${filtered.length} shift</div>
+        <div class="hero-extra">
+          <div class="hero-extra-row"><span>Cash</span><span>${rupiah(totalCash)}</span></div>
+          <div class="hero-extra-row"><span>QRIS</span><span>${rupiah(totalQris)}</span></div>
+          <div class="hero-extra-row">
+            <span>Selisih kas total</span>
+            <span style="color:${totalVariance === 0 ? 'var(--cash)' : 'var(--alert)'}">${totalVariance === 0 ? 'Pas' : rupiah(totalVariance)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Filter</div>
+      <div class="form-row" style="margin-bottom:16px">
+        <label class="field"><span>Kasir</span>
+          <select id="sh-filter-cashier">
+            ${cashierOptions.map(c => `<option value="${c.id}" ${filterCashier === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
+          </select>
+        </label>
+        <label class="field"><span>Periode</span>
+          <select id="sh-filter-period">
+            <option value="all" ${filterPeriod === 'all' ? 'selected' : ''}>Semua</option>
+            <option value="today" ${filterPeriod === 'today' ? 'selected' : ''}>Hari ini</option>
+            <option value="week" ${filterPeriod === 'week' ? 'selected' : ''}>7 hari</option>
+            <option value="month" ${filterPeriod === 'month' ? 'selected' : ''}>Bulan ini</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="section-title">Daftar shift</div>
+      <div class="tx-list">
+        ${filtered.length ? filtered.map(sh => {
+          const varianceColor = sh.variance === 0 ? 'var(--cash)' : 'var(--alert)';
+          const varianceText = sh.variance === 0 ? 'Pas' : rupiah(sh.variance);
+          return `
+            <div class="shift-card" style="padding:14px;margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">
+                <div>
+                  <div style="font-weight:600;font-size:14px">${sh.cashierName || '-'}</div>
+                  <div class="muted small">${sh.outlet || '-'} · ${sh.id}</div>
+                </div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;font-size:14px">${rupiah(sh.cash + sh.qris)}</div>
+                  <div class="muted small">${sh.tx} transaksi</div>
+                </div>
+              </div>
+              <div class="shift-rows" style="margin:0">
+                <div class="shift-row"><span class="lbl">Waktu</span><span class="val">${sh.start} – ${sh.end}</span></div>
+                <div class="shift-row"><span class="lbl">Kas awal</span><span class="val">${rupiah(sh.opening)}</span></div>
+                <div class="shift-row"><span class="lbl">Cash</span><span class="val">${rupiah(sh.cash)}</span></div>
+                <div class="shift-row"><span class="lbl">QRIS</span><span class="val">${rupiah(sh.qris)}</span></div>
+                <div class="shift-row"><span class="lbl">Kas akhir</span><span class="val">${rupiah(sh.closing)}</span></div>
+                <div class="shift-row"><span class="lbl">Expected</span><span class="val">${rupiah(sh.expected)}</span></div>
+                <div class="shift-row"><span class="lbl">Selisih</span><span class="val" style="color:${varianceColor}">${varianceText}</span></div>
+              </div>
+            </div>
+          `;
+        }).join('') : '<div class="empty"><div class="empty-title">Belum ada shift</div><div class="empty-sub">Riwayat shift karyawan akan muncul di sini.</div></div>'}
+      </div>
+    `;
+
+    bindBackToManage();
+    $('#sh-filter-cashier').onchange = e => { filterCashier = e.target.value; render(); };
+    $('#sh-filter-period').onchange = e => { filterPeriod = e.target.value; render(); };
+  };
+  render();
 }
 
 // QRIS
@@ -2905,7 +3133,7 @@ ${r.footer}`.trim();
   render();
 }
 
-// NOTIF
+// NOTIF SETTINGS
 function pageNotifSettings() {
   const main = $('#main');
   const n = state.settings.notifications;
@@ -2927,7 +3155,7 @@ function pageNotifSettings() {
   });
 }
 
-// SYNC
+// SYNC SETTINGS
 function pageSyncSettings() {
   const main = $('#main');
   const render = () => {
@@ -2957,7 +3185,7 @@ function pageSyncSettings() {
   render();
 }
 
-// SECURITY
+// SECURITY SETTINGS
 function pageSecuritySettings() {
   const main = $('#main');
   const sec = state.settings.security;
@@ -2968,20 +3196,14 @@ function pageSecuritySettings() {
         ${backToManageBtn()}
       </div>
       <div class="security-info">
-        Aturan ini membatasi kasir untuk void/refund supaya tidak bisa menghilangkan uang dari kas.
-        Void/refund yang melebihi limit akan butuh PIN owner.
+        Void hanya bisa dilakukan oleh <b>Owner</b>. Refund oleh kasir dibatasi limit & butuh PIN owner kalau melebihi.
       </div>
       <div class="form-section">
-        <label class="field"><span>Window void untuk kasir (menit)</span>
-          <input type="number" id="sec-window" value="${sec.voidWindowMinutes}" min="1" max="60" /></label>
-        <p class="muted small" style="margin:-6px 0 12px">Kasir hanya bisa void dalam X menit pertama setelah transaksi.</p>
-        <label class="field"><span>Limit void kasir (Rp)</span>
-          <input type="text" inputmode="numeric" id="sec-void-limit" value="${sec.voidLimitCashier.toLocaleString('id-ID')}" /></label>
         <label class="field"><span>Limit refund kasir (Rp)</span>
           <input type="text" inputmode="numeric" id="sec-refund-limit" value="${sec.refundLimitCashier.toLocaleString('id-ID')}" /></label>
         <label class="field"><span>PIN Owner (4 digit)</span>
           <input type="text" id="sec-pin" value="${sec.ownerPin}" maxlength="4" inputmode="numeric" /></label>
-        <label class="field"><span>Alert kalau kasir void ≥ X kali/hari</span>
+        <label class="field"><span>Alert kalau kasir refund ≥ X kali/hari</span>
           <input type="number" id="sec-alert" value="${sec.alertVoidPerDay}" min="1" max="100" /></label>
         <div class="form-actions" style="margin-top:8px">
           <button class="btn btn-primary btn-block" id="sec-save">Simpan</button>
@@ -2989,13 +3211,10 @@ function pageSecuritySettings() {
       </div>
     `;
     bindBackToManage();
-    bindRupiahInput('#sec-void-limit', () => {});
     bindRupiahInput('#sec-refund-limit', () => {});
     $('#sec-save').onclick = () => {
       const pin = $('#sec-pin').value.trim();
       if (!/^\d{4}$/.test(pin)) return toast('PIN harus 4 digit angka', 'error');
-      sec.voidWindowMinutes = parseInt($('#sec-window').value) || 5;
-      sec.voidLimitCashier = parseRupiahInput($('#sec-void-limit').value);
       sec.refundLimitCashier = parseRupiahInput($('#sec-refund-limit').value);
       sec.ownerPin = pin;
       sec.alertVoidPerDay = parseInt($('#sec-alert').value) || 5;
@@ -3039,7 +3258,7 @@ function pageAuditLog() {
   render();
 }
 
-// THEME
+// THEME SETTINGS
 function pageThemeSettings() {
   const main = $('#main');
   const render = () => {
@@ -3112,27 +3331,37 @@ function pageAbout() {
   bindBackToManage();
 }
 
-// EXPENSES (kasir)
+// EXPENSES KASIR
 function pageExpenses() {
   const main = $('#main');
-  const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+  const CATS = ['Bahan', 'Operasional'];
   const render = () => {
     const total = state.expenses.reduce((s, e) => s + e.amount, 0);
+    const canEditDelete = state.user.role === 'owner';
+
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Pengeluaran</h2><div class="sub">${state.expenses.length} catatan</div></div>
         ${backToManageBtn()}
       </div>
+
       <div class="kpi-hero">
         <div class="label">Total pengeluaran</div>
         <div class="amount amount-expense">${rupiah(total)}</div>
+        <div class="delta">${state.expenses.length} catatan</div>
       </div>
+
       <div class="kpi-compact" style="margin-bottom:16px">
         ${CATS.map(cat => {
           const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
           return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
         }).join('')}
       </div>
+
+      <div class="security-info" style="margin-bottom:12px">
+        Kasir hanya bisa <b>mencatat</b> pengeluaran (<b>Bahan</b> & <b>Operasional</b>). Untuk koreksi atau hapus, hubungi owner.
+      </div>
+
       <div class="tx-list">
         ${state.expenses.length ? state.expenses.map(e => `
           <div class="list-row">
@@ -3142,14 +3371,16 @@ function pageExpenses() {
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
-              <div class="row-actions">
-                <button class="icon-btn sm" data-edit="${e.id}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                </button>
-                <button class="icon-btn sm" data-del="${e.id}">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                </button>
-              </div>
+              ${canEditDelete ? `
+                <div class="row-actions">
+                  <button class="icon-btn sm" data-edit="${e.id}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  <button class="icon-btn sm" data-del="${e.id}">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                  </button>
+                </div>
+              ` : ''}
             </div>
           </div>`).join('')
         : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap + untuk catat pengeluaran.</div></div>'}
@@ -3266,39 +3497,14 @@ $('#printer-indicator').onclick = () => {
   if (state.user.role === 'owner') {
     state.manageRoute = 'printer';
     state.ownerTab = 'manage';
-    pushNav();
-    renderNav();
-    renderMain();
   } else {
     if (!hasPerm('printer')) return toast('Tidak ada akses printer', 'error');
-    openSheet(`
-      <h3 style="font-size:17px;margin-bottom:4px">Printer Bluetooth</h3>
-      <p class="muted small" style="margin:0 0 16px">${state.settings.printer.connected ? 'Terhubung: ' + state.settings.printer.device : 'Belum ada printer terhubung'}</p>
-      <div style="display:grid;gap:8px">
-        ${state.settings.printer.connected
-          ? `<button class="btn btn-ghost btn-block" id="test-print-c">Test print</button>
-             <button class="btn btn-danger btn-block" id="disconnect-c">Putuskan</button>`
-          : `<button class="btn btn-primary btn-block" id="scan-printer-c">Cari printer</button>`}
-      </div>
-    `);
-    const scan = $('#scan-printer-c');
-    if (scan) scan.onclick = () => {
-      toast('Mencari printer…');
-      setTimeout(() => {
-        state.settings.printer.connected = true;
-        closeSheet();
-        toast('SK-Printer-58mm terhubung', 'success');
-      }, 1200);
-    };
-    const disc = $('#disconnect-c');
-    if (disc) disc.onclick = () => {
-      state.settings.printer.connected = false;
-      closeSheet();
-      toast('Printer diputus');
-    };
-    const tp = $('#test-print-c');
-    if (tp) tp.onclick = () => toast('Test print terkirim');
+    state.manageRoute = 'cashier-printer';
+    state.activeView = 'manage';
   }
+  pushNav();
+  renderNav();
+  renderMain();
 };
 $('#notif-btn').onclick = () => {
   const list = state.notifications;
@@ -3324,22 +3530,26 @@ $('#notif-btn').onclick = () => {
   renderTabletSidebar();
 };
 $('#manage-btn').onclick = () => {
-  if (!state.user || state.user.role !== 'owner') return;
-  if (state.ownerTab === 'manage') {
-    try { history.back(); }
-    catch (e) {
-      state.ownerTab = 'pos';
-      state.manageRoute = null;
-      renderNav();
-      renderMain();
+  if (!state.user) return;
+  if (state.user.role === 'owner') {
+    if (state.ownerTab === 'manage') {
+      try { history.back(); }
+      catch (e) { state.ownerTab = 'pos'; state.manageRoute = null; renderNav(); renderMain(); }
+      return;
     }
+    state.ownerTab = 'manage';
+    state.manageRoute = null;
+    pushNav(); renderNav(); renderMain();
     return;
   }
-  state.ownerTab = 'manage';
+  if (state.activeView === 'manage') {
+    try { history.back(); }
+    catch (e) { state.activeView = 'pos'; state.manageRoute = null; renderNav(); renderMain(); }
+    return;
+  }
+  state.activeView = 'manage';
   state.manageRoute = null;
-  pushNav();
-  renderNav();
-  renderMain();
+  pushNav(); renderNav(); renderMain();
 };
 $('#sheet-backdrop').onclick = closeSheet;
 
@@ -3391,9 +3601,7 @@ function printReceipt(tx) {
   pushNav();
 }
 
-// ============================================================
-// BREAKPOINT LISTENER (matchMedia + resize + orientation)
-// ============================================================
+// BREAKPOINT LISTENER
 const _mqTablet = window.matchMedia('(min-width: 768px) and (min-height: 600px)');
 
 function _handleTabletChange() {
@@ -3415,90 +3623,3 @@ window.addEventListener('orientationchange', () => setTimeout(_handleTabletChang
 
 // INIT
 updateSyncIndicator();
-
-// ============================================================
-// DEV: URL QUERY MODE — untuk screenshot cepat via ?screen=xxx
-// Otomatis lompat ke halaman tertentu tanpa klik manual.
-// ============================================================
-(function initScreenFromQuery() {
-  var screen = new URLSearchParams(location.search).get('screen');
-  if (!screen) return;
-
-  setTimeout(function() {
-    // 1) AUTH SCREENS
-    if (screen === 'login')    return showView('view-login');
-    if (screen === 'register') return showView('view-register');
-    if (screen === 'forgot')   return showView('view-forgot');
-    if (screen === 'setup') {
-      state.pendingRegister = { name: 'Demo', email: 'demo@test.com', password: '123456', whatsapp: '' };
-      document.querySelector('#setup-email').value = 'demo@test.com';
-      document.querySelector('#setup-name').value = 'Demo';
-      return showView('view-setup');
-    }
-
-    // 2) AUTO-LOGIN
-    var isOwnerScreen = screen.indexOf('owner-') === 0 || screen.indexOf('manage-') === 0;
-    if (isOwnerScreen) {
-      state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner', email: 'owner@sakukasir.com' };
-    } else {
-      var w = state.workers.find(function(x) { return x.username === 'kasir'; });
-      state.user = { username: w.username, displayName: w.displayName, role: 'cashier', outlet: w.outlet, permissions: w.permissions };
-    }
-    showView('view-app');
-
-    // 3) SET STATE
-    // Owner
-    if (screen === 'owner-pos')              state.ownerTab = 'pos';
-    if (screen === 'owner-pos-cart')       { state.ownerTab = 'pos'; state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }, { id:3, name:'Roti Bakar Coklat', price:15000, qty:1, unit:'porsi' }]; }
-    if (screen === 'owner-checkout')       { state.ownerTab = 'checkout'; state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }]; }
-    if (screen === 'owner-reports')          state.ownerTab = 'reports';
-    if (screen === 'owner-reports-expenses'){ state.ownerTab = 'reports'; window.__startTab = 'expenses'; }
-    if (screen === 'owner-reports-summary') { state.ownerTab = 'reports'; window.__startTab = 'reports'; }
-
-    // Manage
-    if (screen === 'manage')                 { state.ownerTab = 'manage'; state.manageRoute = null; }
-    if (screen === 'manage-products')        { state.ownerTab = 'manage'; state.manageRoute = 'products'; }
-    if (screen === 'manage-categories')      { state.ownerTab = 'manage'; state.manageRoute = 'categories'; }
-    if (screen === 'manage-inventory')       { state.ownerTab = 'manage'; state.manageRoute = 'inventory'; }
-    if (screen === 'manage-outlets')         { state.ownerTab = 'manage'; state.manageRoute = 'outlets'; }
-    if (screen === 'manage-workers')         { state.ownerTab = 'manage'; state.manageRoute = 'workers'; }
-    if (screen === 'manage-qris')            { state.ownerTab = 'manage'; state.manageRoute = 'qris'; }
-    if (screen === 'manage-printer')         { state.ownerTab = 'manage'; state.manageRoute = 'printer'; }
-    if (screen === 'manage-receipt')         { state.ownerTab = 'manage'; state.manageRoute = 'receipt'; }
-    if (screen === 'manage-notif')           { state.ownerTab = 'manage'; state.manageRoute = 'notif-settings'; }
-    if (screen === 'manage-sync')            { state.ownerTab = 'manage'; state.manageRoute = 'sync-settings'; }
-    if (screen === 'manage-security')        { state.ownerTab = 'manage'; state.manageRoute = 'security-settings'; }
-    if (screen === 'manage-audit')           { state.ownerTab = 'manage'; state.manageRoute = 'audit-log'; }
-    if (screen === 'manage-theme')           { state.ownerTab = 'manage'; state.manageRoute = 'theme-settings'; }
-    if (screen === 'manage-profile')         { state.ownerTab = 'manage'; state.manageRoute = 'profile'; }
-    if (screen === 'manage-about')           { state.ownerTab = 'manage'; state.manageRoute = 'about'; }
-
-    // Kasir
-    if (screen === 'kasir-dashboard')    state.activeView = 'dashboard';
-    if (screen === 'kasir-pos')          state.activeView = 'pos';
-    if (screen === 'kasir-transactions') state.activeView = 'transactions';
-    if (screen === 'kasir-shift')        state.activeView = 'shift';
-
-    // Modal / Sheet
-    if (screen === 'modal-void')     { openVoidSheet(state.transactions[0]); }
-    if (screen === 'modal-refund')   { openRefundSheet(state.transactions[0]); }
-    if (screen === 'sheet-checkout') { state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }]; openCheckout(); }
-    if (screen === 'modal-confirm')  { confirmModal('Hapus produk?', '"Kopi Susu" akan dihapus permanen.', 'Hapus', function(){}); }
-    if (screen === 'success')        { showSuccess(state.transactions[0]); }
-
-    // 4) RENDER
-    renderNav();
-    renderMain();
-    renderOutletChip();
-    renderTabletSidebar();
-
-    // 5) Khusus laporan: klik tab setelah render
-    if (window.__startTab) {
-      setTimeout(function() {
-        document.querySelectorAll('.seg-tab').forEach(function(t) {
-          if (t.dataset.tab === window.__startTab) t.click();
-        });
-      }, 100);
-    }
-  }, 150);
-})();
