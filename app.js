@@ -3415,3 +3415,90 @@ window.addEventListener('orientationchange', () => setTimeout(_handleTabletChang
 
 // INIT
 updateSyncIndicator();
+
+// ============================================================
+// DEV: URL QUERY MODE — untuk screenshot cepat via ?screen=xxx
+// Otomatis lompat ke halaman tertentu tanpa klik manual.
+// ============================================================
+(function initScreenFromQuery() {
+  var screen = new URLSearchParams(location.search).get('screen');
+  if (!screen) return;
+
+  setTimeout(function() {
+    // 1) AUTH SCREENS
+    if (screen === 'login')    return showView('view-login');
+    if (screen === 'register') return showView('view-register');
+    if (screen === 'forgot')   return showView('view-forgot');
+    if (screen === 'setup') {
+      state.pendingRegister = { name: 'Demo', email: 'demo@test.com', password: '123456', whatsapp: '' };
+      document.querySelector('#setup-email').value = 'demo@test.com';
+      document.querySelector('#setup-name').value = 'Demo';
+      return showView('view-setup');
+    }
+
+    // 2) AUTO-LOGIN
+    var isOwnerScreen = screen.indexOf('owner-') === 0 || screen.indexOf('manage-') === 0;
+    if (isOwnerScreen) {
+      state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner', email: 'owner@sakukasir.com' };
+    } else {
+      var w = state.workers.find(function(x) { return x.username === 'kasir'; });
+      state.user = { username: w.username, displayName: w.displayName, role: 'cashier', outlet: w.outlet, permissions: w.permissions };
+    }
+    showView('view-app');
+
+    // 3) SET STATE
+    // Owner
+    if (screen === 'owner-pos')              state.ownerTab = 'pos';
+    if (screen === 'owner-pos-cart')       { state.ownerTab = 'pos'; state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }, { id:3, name:'Roti Bakar Coklat', price:15000, qty:1, unit:'porsi' }]; }
+    if (screen === 'owner-checkout')       { state.ownerTab = 'checkout'; state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }]; }
+    if (screen === 'owner-reports')          state.ownerTab = 'reports';
+    if (screen === 'owner-reports-expenses'){ state.ownerTab = 'reports'; window.__startTab = 'expenses'; }
+    if (screen === 'owner-reports-summary') { state.ownerTab = 'reports'; window.__startTab = 'reports'; }
+
+    // Manage
+    if (screen === 'manage')                 { state.ownerTab = 'manage'; state.manageRoute = null; }
+    if (screen === 'manage-products')        { state.ownerTab = 'manage'; state.manageRoute = 'products'; }
+    if (screen === 'manage-categories')      { state.ownerTab = 'manage'; state.manageRoute = 'categories'; }
+    if (screen === 'manage-inventory')       { state.ownerTab = 'manage'; state.manageRoute = 'inventory'; }
+    if (screen === 'manage-outlets')         { state.ownerTab = 'manage'; state.manageRoute = 'outlets'; }
+    if (screen === 'manage-workers')         { state.ownerTab = 'manage'; state.manageRoute = 'workers'; }
+    if (screen === 'manage-qris')            { state.ownerTab = 'manage'; state.manageRoute = 'qris'; }
+    if (screen === 'manage-printer')         { state.ownerTab = 'manage'; state.manageRoute = 'printer'; }
+    if (screen === 'manage-receipt')         { state.ownerTab = 'manage'; state.manageRoute = 'receipt'; }
+    if (screen === 'manage-notif')           { state.ownerTab = 'manage'; state.manageRoute = 'notif-settings'; }
+    if (screen === 'manage-sync')            { state.ownerTab = 'manage'; state.manageRoute = 'sync-settings'; }
+    if (screen === 'manage-security')        { state.ownerTab = 'manage'; state.manageRoute = 'security-settings'; }
+    if (screen === 'manage-audit')           { state.ownerTab = 'manage'; state.manageRoute = 'audit-log'; }
+    if (screen === 'manage-theme')           { state.ownerTab = 'manage'; state.manageRoute = 'theme-settings'; }
+    if (screen === 'manage-profile')         { state.ownerTab = 'manage'; state.manageRoute = 'profile'; }
+    if (screen === 'manage-about')           { state.ownerTab = 'manage'; state.manageRoute = 'about'; }
+
+    // Kasir
+    if (screen === 'kasir-dashboard')    state.activeView = 'dashboard';
+    if (screen === 'kasir-pos')          state.activeView = 'pos';
+    if (screen === 'kasir-transactions') state.activeView = 'transactions';
+    if (screen === 'kasir-shift')        state.activeView = 'shift';
+
+    // Modal / Sheet
+    if (screen === 'modal-void')     { openVoidSheet(state.transactions[0]); }
+    if (screen === 'modal-refund')   { openRefundSheet(state.transactions[0]); }
+    if (screen === 'sheet-checkout') { state.cart = [{ id:1, name:'Kopi Susu Gula Aren', price:18000, qty:2, unit:'cup' }]; openCheckout(); }
+    if (screen === 'modal-confirm')  { confirmModal('Hapus produk?', '"Kopi Susu" akan dihapus permanen.', 'Hapus', function(){}); }
+    if (screen === 'success')        { showSuccess(state.transactions[0]); }
+
+    // 4) RENDER
+    renderNav();
+    renderMain();
+    renderOutletChip();
+    renderTabletSidebar();
+
+    // 5) Khusus laporan: klik tab setelah render
+    if (window.__startTab) {
+      setTimeout(function() {
+        document.querySelectorAll('.seg-tab').forEach(function(t) {
+          if (t.dataset.tab === window.__startTab) t.click();
+        });
+      }, 100);
+    }
+  }, 150);
+})();
