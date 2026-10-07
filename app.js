@@ -112,6 +112,11 @@ function rupiah(n) {
   const sign = num < 0 ? '-' : '';
   return sign + 'Rp ' + Math.abs(num).toLocaleString('id-ID');
 }
+function kpiAmountHTML(n) {
+  const num = Math.round(n);
+  const sign = num < 0 ? '-' : '';
+  return `<span class="amount-currency">Rp</span><span class="amount-value">${sign}${Math.abs(num).toLocaleString('id-ID')}</span>`;
+}
 function calculateTotals(cart, discount = 0, taxPct = 0) {
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const disc = Math.min(Math.max(0, Math.round(discount)), subtotal);
@@ -189,8 +194,54 @@ function periodRange(period, customFrom, customTo) {
   }
   return { from: dateStr(now), to: dateStr(now) };
 }
+function getPrevPeriodRange(period, customFrom, customTo) {
+  const now = new Date();
+  if (period === 'today') {
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    return { from: dateStr(y), to: dateStr(y) };
+  }
+  if (period === 'week') {
+    const start = new Date(now); start.setDate(now.getDate() - 13);
+    const end = new Date(now); end.setDate(now.getDate() - 7);
+    return { from: dateStr(start), to: dateStr(end) };
+  }
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: dateStr(start), to: dateStr(end) };
+  }
+  if (period === 'lastmonth') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+    return { from: dateStr(start), to: dateStr(end) };
+  }
+  if (period === 'custom' && customFrom && customTo) {
+    const from = new Date(customFrom);
+    const to = new Date(customTo);
+    const days = Math.round((to - from) / 86400000) + 1;
+    const prevTo = new Date(from); prevTo.setDate(prevTo.getDate() - 1);
+    const prevFrom = new Date(prevTo); prevFrom.setDate(prevFrom.getDate() - days + 1);
+    return { from: dateStr(prevFrom), to: dateStr(prevTo) };
+  }
+  if (period === 'all') return { from: '0000-01-01', to: '0000-01-01' };
+  return { from: dateStr(now), to: dateStr(now) };
+}
 function periodLabel(p) {
   return ({ all: 'Semua', today: 'Hari ini', week: '7 hari', month: 'Bulan ini', lastmonth: 'Bulan lalu', custom: 'Custom' })[p] || 'Semua';
+}
+function computeGrowth(current, previous) {
+  if (previous === 0) {
+    if (current === 0) return { pct: 0, direction: 'flat' };
+    return { pct: 100, direction: 'up' };
+  }
+  const pct = ((current - previous) / previous) * 100;
+  return {
+    pct: Math.abs(pct),
+    direction: pct > 0.5 ? 'up' : (pct < -0.5 ? 'down' : 'flat'),
+  };
+}
+function growthIcon(dir) {
+  return dir === 'up' ? '↑' : dir === 'down' ? '↓' : '·';
 }
 function toast(msg, type = '') {
   const host = $('#toast-host');
@@ -201,7 +252,7 @@ function toast(msg, type = '') {
   setTimeout(() => el.remove(), 2600);
 }
 
-// HISTORY (Android back button)
+// HISTORY
 let _navDepth = 0;
 function pushNav() {
   _navDepth++;
@@ -211,7 +262,6 @@ function tryCloseSomething() {
   if (!$('#sheet').hidden) { closeSheet(); return true; }
   if ($('#modal-host').innerHTML.trim()) { $('#modal-host').innerHTML = ''; return true; }
   if ($('#receipt-host').innerHTML.trim()) { $('#receipt-host').innerHTML = ''; return true; }
-  // Auth back button handling
   if (!state.user) {
     if ($('#view-setup').classList.contains('active')) { showView('view-register'); return true; }
     if ($('#view-register').classList.contains('active')) { showView('view-login'); return true; }
@@ -395,16 +445,14 @@ function captureQrisProof(callback) {
   input.click();
 }
 
-// ============================================================
 // AUTH
-// ============================================================
 function showView(id) {
   $$('.view').forEach(v => v.classList.remove('active'));
   $('#' + id).classList.add('active');
   window.scrollTo(0, 0);
 }
 
-// Eye toggle untuk semua password field
+// Eye toggle
 function bindEyeToggles() {
   $$('.eye-btn').forEach(btn => {
     btn.onclick = (e) => {
@@ -422,15 +470,15 @@ function bindEyeToggles() {
 }
 bindEyeToggles();
 
-// Navigation antar view auth
-$('#show-register').onclick = () => showView('view-register');
-$('#show-forgot').onclick = () => showView('view-forgot');
-$('#show-login').onclick = () => showView('view-login');
-$('#reg-cancel').onclick = () => showView('view-login');
-$('#forgot-cancel').onclick = () => showView('view-login');
-$('#setup-back').onclick = () => showView('view-register');
+// Nav auth dengan guard (biar tidak crash kalau ID tidak ada)
+const _sr = $('#show-register'); if (_sr) _sr.onclick = () => showView('view-register');
+const _sf = $('#show-forgot');   if (_sf) _sf.onclick = () => showView('view-forgot');
+const _sl = $('#show-login');    if (_sl) _sl.onclick = () => showView('view-login');
+const _rc = $('#reg-cancel');    if (_rc) _rc.onclick = () => showView('view-login');
+const _fc = $('#forgot-cancel'); if (_fc) _fc.onclick = () => showView('view-login');
+const _sb = $('#setup-back');    if (_sb) _sb.onclick = () => showView('view-register');
 
-// ---------- LOGIN ----------
+// LOGIN
 $('#login-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const errEl = $('#login-error');
@@ -446,8 +494,6 @@ $('#login-form').addEventListener('submit', (e) => {
   btn.classList.add('loading');
   setTimeout(() => {
     btn.classList.remove('loading');
-
-    // Demo accounts
     if (user === 'owner' || user === 'owner@sakukasir.com') {
       state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner', email: 'owner@sakukasir.com' };
       return enterApp();
@@ -460,26 +506,13 @@ $('#login-form').addEventListener('submit', (e) => {
       };
       return enterApp();
     }
-
-    // User hasil registrasi
     const reg = state.registeredUsers.find(u =>
       u.email.toLowerCase() === user || u.name.toLowerCase() === user
     );
-    if (!reg) {
-      errEl.textContent = 'Email atau password salah.';
-      errEl.hidden = false;
-      return;
-    }
-    if (reg.password !== pass) {
-      errEl.textContent = 'Email atau password salah.';
-      errEl.hidden = false;
-      return;
-    }
+    if (!reg) { errEl.textContent = 'Email atau password salah.'; errEl.hidden = false; return; }
+    if (reg.password !== pass) { errEl.textContent = 'Email atau password salah.'; errEl.hidden = false; return; }
     state.user = {
-      username: reg.email,
-      email: reg.email,
-      displayName: reg.name,
-      role: 'owner',
+      username: reg.email, email: reg.email, displayName: reg.name, role: 'owner',
     };
     if (reg.business) {
       state.outlet = { id: 1, name: reg.business.name, address: reg.business.address, phone: reg.business.phone, active: true };
@@ -490,7 +523,7 @@ $('#login-form').addEventListener('submit', (e) => {
   }, 500);
 });
 
-// ---------- REGISTER ----------
+// REGISTER
 $('#register-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const errEl = $('#register-error');
@@ -526,17 +559,13 @@ $('#register-form').addEventListener('submit', (e) => {
     errEl.hidden = false;
     return;
   }
-
-  // Simpan sementara, lengkapi setelah setup bisnis
   state.pendingRegister = { name, email, password, whatsapp };
-
-  // Isi email bisnis di form setup
   $('#setup-email').value = email;
   $('#setup-name').value = name;
   showView('view-setup');
 });
 
-// ---------- SETUP BISNIS ----------
+// SETUP BISNIS
 $('#setup-form').addEventListener('submit', (e) => {
   e.preventDefault();
   if (!state.pendingRegister) {
@@ -553,7 +582,6 @@ $('#setup-form').addEventListener('submit', (e) => {
     toast('Lengkapi semua field wajib.', 'error');
     return;
   }
-
   const user = {
     ...state.pendingRegister,
     business: {
@@ -567,17 +595,14 @@ $('#setup-form').addEventListener('submit', (e) => {
   };
   state.registeredUsers.push(user);
   localStorage.setItem('sk-users', JSON.stringify(state.registeredUsers));
-
-  // Pre-fill login
   $('#login-user').value = user.email;
   $('#login-pass').value = '';
-
   state.pendingRegister = null;
   toast('Akun berhasil dibuat. Silakan login.', 'success');
   setTimeout(() => showView('view-login'), 600);
 });
 
-// ---------- FORGOT ----------
+// FORGOT
 $('#forgot-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const em = $('#forgot-email').value.trim();
@@ -586,9 +611,6 @@ $('#forgot-form').addEventListener('submit', (e) => {
   setTimeout(() => showView('view-login'), 900);
 });
 
-// ============================================================
-// APP ENTRY
-// ============================================================
 function enterApp() {
   showView('view-app');
   state.manageRoute = null;
@@ -605,6 +627,7 @@ function enterApp() {
   renderMain();
   updateSyncIndicator();
   renderOutletChip();
+  renderTabletSidebar();
 }
 function handleLogout() {
   if (state.activeShift) {
@@ -621,6 +644,7 @@ function doLogout() {
   showView('view-login');
   $('#login-pass').value = '';
   $('#login-error').hidden = true;
+  renderTabletSidebar();
 }
 
 // NAV
@@ -631,6 +655,7 @@ function renderNav() {
   if (isManage) {
     nav.classList.add('hidden');
     nav.innerHTML = '';
+    renderTabletSidebar();
     return;
   }
   nav.classList.remove('hidden');
@@ -673,11 +698,39 @@ function navItem(view, label, svgInner) {
     </button>`;
 }
 
+// ROUTER
+function renderMain() {
+  const main = $('#main');
+  main.classList.remove('has-sticky-bar');
+  main.classList.remove('no-nav');
+  main.style.paddingBottom = '';
+  $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
+  if (!state.user) return;
+
+  // Safety net — sidebar selalu sinkron
+  requestAnimationFrame(() => {
+    if (typeof renderTabletSidebar === 'function') renderTabletSidebar();
+  });
+
+  const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
+  if (v === 'manage') {
+    main.classList.add('no-nav');
+    return renderManage();
+  }
+  if (v === 'pos')          return renderPOS(main);
+  if (v === 'checkout')     return renderCheckout(main);
+  if (v === 'dashboard')    return renderDashboard(main);
+  if (v === 'transactions') return renderTransactions(main);
+  if (v === 'shift')        return renderShift(main);
+  if (v === 'reports')      return renderReports(main);
+}
+
+// ============================================================
 // TABLET SIDEBAR
+// ============================================================
 function renderTabletSidebar() {
   const sb = $('#tablet-sidebar');
   if (!sb) return;
-  if (window.innerWidth < 900) { sb.innerHTML = ''; return; }
   if (!state.user) { sb.innerHTML = ''; return; }
 
   const isOwner = state.user.role === 'owner';
@@ -757,58 +810,26 @@ function renderTabletSidebar() {
     </div>
   `;
 
-  // Nav handler
-  $$('#tablet-sidebar .ts-nav-item').forEach(b => {
-    b.onclick = () => {
-      const v = b.dataset.tab;
-      if (isOwner) state.ownerTab = v;
+  // EVENT DELEGATION — 1 handler untuk semua klik di sidebar
+  sb.onclick = (e) => {
+    const navBtn = e.target.closest('.ts-nav-item');
+    if (navBtn) {
+      const v = navBtn.dataset.tab;
+      if (state.user.role === 'owner') state.ownerTab = v;
       else state.activeView = v;
       state.manageRoute = null;
       pushNav();
       renderNav();
       renderMain();
-    };
-  });
-
-  // Outlet chip
-  const outletBtn = $('#ts-outlet');
-  if (outletBtn) outletBtn.onclick = () => $('#outlet-chip').click();
-
-  // Action shortcuts — trigger handler di header
-  const sSync = $('#ts-sync');
-  if (sSync) sSync.onclick = () => $('#sync-indicator').click();
-  const sPr = $('#ts-printer');
-  if (sPr) sPr.onclick = () => $('#printer-indicator').click();
-  const sNt = $('#ts-notif');
-  if (sNt) sNt.onclick = () => $('#notif-btn').click();
-  const sMg = $('#ts-manage');
-  if (sMg) sMg.onclick = () => $('#manage-btn').click();
-
-  // Logout
-  const sLg = $('#ts-logout');
-  if (sLg) sLg.onclick = handleLogout;
-}
-
-// ROUTER
-function renderMain() {
-  const main = $('#main');
-  main.classList.remove('has-sticky-bar');
-  main.classList.remove('no-nav');
-  main.style.paddingBottom = '';
-  $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
-  if (!state.user) return;
-  const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
-
-  if (v === 'manage') {
-    main.classList.add('no-nav');
-    return renderManage();
-  }
-  if (v === 'pos')          return renderPOS(main);
-  if (v === 'checkout')     return renderCheckout(main);
-  if (v === 'dashboard')    return renderDashboard(main);
-  if (v === 'transactions') return renderTransactions(main);
-  if (v === 'shift')        return renderShift(main);
-  if (v === 'reports')      return renderReports(main);
+      return;
+    }
+    if (e.target.closest('#ts-outlet'))    return $('#outlet-chip').click();
+    if (e.target.closest('#ts-sync'))      return $('#sync-indicator').click();
+    if (e.target.closest('#ts-printer'))   return $('#printer-indicator').click();
+    if (e.target.closest('#ts-notif'))     return $('#notif-btn').click();
+    if (e.target.closest('#ts-manage'))    return $('#manage-btn').click();
+    if (e.target.closest('#ts-logout'))    return handleLogout();
+  };
 }
 
 // OUTLET CHIP
@@ -841,6 +862,7 @@ function renderOutletChip() {
         $('#outlet-name').textContent = o.name;
         state.settings.receipt.bizName = o.name;
         closeSheet();
+        renderTabletSidebar();
         toast('Outlet diganti: ' + o.name);
       });
     };
@@ -1725,29 +1747,51 @@ function renderShift(main) {
   }
 }
 
-// DASHBOARD
+// ============================================================
+// DASHBOARD (REVISED: growth vs kemarin + kpiAmountHTML)
+// ============================================================
 function renderDashboard(main) {
   const today = todayStr();
+  const yDate = new Date(); yDate.setDate(yDate.getDate() - 1);
+  const yesterday = dateStr(yDate);
+
   const todayTx = state.transactions.filter(t => t.date === today);
   const active = todayTx.filter(t => t.status !== 'void');
   const totalSales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
 
+  // Growth vs kemarin
+  const yTx = state.transactions.filter(t => t.date === yesterday && t.status !== 'void');
+  const ySales = yTx.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+  const growth = computeGrowth(totalSales, ySales);
+
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
         <div class="sub">Ringkasan shift kamu</div></div>
     </div>
+
     <div class="kpi-hero">
-      <div class="label">Penjualan hari ini</div>
+      <div class="label">Ringkasan Penjualan · Hari ini</div>
       <div class="amount">${rupiah(totalSales)}</div>
       <div class="delta">${active.length} transaksi</div>
+      <div class="hero-extra">
+        <div class="hero-growth ${growth.direction === 'up' ? 'pos' : (growth.direction === 'down' ? 'neg' : '')}">
+          ${growthIcon(growth.direction)} ${growth.pct.toFixed(0)}% dari kemarin
+        </div>
+        <div class="hero-extra-row">
+          <span>Kemarin</span>
+          <span>${rupiah(ySales)}</span>
+        </div>
+      </div>
     </div>
+
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-      <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
+      <div class="kpi-card"><div class="label">Cash</div><div class="amount">${kpiAmountHTML(cash)}</div></div>
+      <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${kpiAmountHTML(qris)}</div></div>
     </div>
+
     ${state.activeShift ? `
       <div class="shift-card">
         <div class="shift-status">Shift aktif</div>
@@ -1757,13 +1801,16 @@ function renderDashboard(main) {
           <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(state.activeShift.cashSales + state.activeShift.qrisSales)}</span></div>
         </div>
       </div>` : ''}
+
     <div class="section-title">Transaksi terbaru</div>
     <div class="tx-list">${todayTx.slice(0, 5).map(renderTxItem).join('') || '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}</div>
   `;
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
-// REPORTS
+// ============================================================
+// REPORTS (REVISED: growth + method-progress + expenses hero)
+// ============================================================
 function renderReports(main) {
   let tab = 'transactions';
   const TABS = [
@@ -1778,6 +1825,9 @@ function renderReports(main) {
   const render = () => {
     const rf = state.reportFilter;
     const range = periodRange(rf.period, rf.dateFrom, rf.dateTo);
+    const prevRange = getPrevPeriodRange(rf.period, rf.dateFrom, rf.dateTo);
+
+    // ---- Current period ----
     const allInPeriod = state.transactions.filter(t => t.date >= range.from && t.date <= range.to);
     const userList = allInPeriod.filter(t => rf.user === 'all' ? true : t.cashierId === rf.user);
 
@@ -1789,14 +1839,36 @@ function renderReports(main) {
     const tax = userList.reduce((s, t) => s + (t.tax || 0), 0);
     const voidAmount = userList.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
     const refundAmount = userList.reduce((s, t) => s + (t.refundAmount || 0), 0);
-    const expenseInPeriod = state.expenses.filter(e => {
+
+    const expensesInPeriod = state.expenses.filter(e => {
       const ed = e.date.slice(0, 10);
       return ed >= range.from && ed <= range.to;
-    }).reduce((s, e) => s + e.amount, 0);
-    const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
+    });
+    const expenseInPeriod = expensesInPeriod.reduce((s, e) => s + e.amount, 0);
     const net = sales - expenseInPeriod;
     const gross = sales + discount;
 
+    // ---- Previous period (untuk growth) ----
+    const prevAll = state.transactions.filter(t => t.date >= prevRange.from && t.date <= prevRange.to);
+    const prevUser = prevAll.filter(t => rf.user === 'all' ? true : t.cashierId === rf.user);
+    const prevActive = prevUser.filter(t => t.status !== 'void');
+    const prevSales = prevActive.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const prevExpense = state.expenses.filter(e => {
+      const ed = e.date.slice(0, 10);
+      return ed >= prevRange.from && ed <= prevRange.to;
+    }).reduce((s, e) => s + e.amount, 0);
+
+    const salesGrowth = computeGrowth(sales, prevSales);
+    const expenseGrowth = computeGrowth(expenseInPeriod, prevExpense);
+
+    // ---- Breakdown pengeluaran per kategori ----
+    const expenseCats = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+    const expenseByCat = expenseCats.map(cat => ({
+      cat,
+      total: expensesInPeriod.filter(e => e.category === cat).reduce((s, e) => s + e.amount, 0),
+    }));
+
+    // ---- Chart 7 hari ----
     const last7 = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -1809,6 +1881,7 @@ function renderReports(main) {
     }
     const maxDay = Math.max(...last7.map(d => d.total), 1);
 
+    // ---- Rekap kasir ----
     const cashierRecap = {};
     userList.forEach(t => {
       const k = t.cashier;
@@ -1849,29 +1922,39 @@ function renderReports(main) {
         `).join('')}
       </div>
 
+      ${/* ===== TAB: TRANSAKSI ===== */ ''}
       ${tab === 'transactions' ? `
         <div class="tx-list">
           ${userList.length ? userList.map(renderTxItem).join('') : '<div class="empty"><div class="empty-title">Belum ada transaksi</div><div class="empty-sub">Coba ubah filter atau periode.</div></div>'}
         </div>
       ` : ''}
 
+      ${/* ===== TAB: PENGELUARAN ===== */ ''}
       ${tab === 'expenses' ? `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${state.expenses.length} catatan</div></div>
+        <div class="kpi-hero">
+          <div class="label">Total Pengeluaran · ${periodText}</div>
+          <div class="amount amount-expense">${rupiah(expenseInPeriod)}</div>
+          <div class="delta">${expensesInPeriod.length} catatan</div>
+          <div class="hero-extra">
+            <div class="hero-growth ${expenseGrowth.direction === 'up' ? 'neg' : (expenseGrowth.direction === 'down' ? 'pos' : '')}">
+              ${growthIcon(expenseGrowth.direction)} ${expenseGrowth.pct.toFixed(0)}% dari periode lalu
+            </div>
+            ${expenseByCat.map(row => `
+              <div class="hero-extra-row">
+                <span>${row.cat}</span>
+                <span>${rupiah(row.total)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 12px">
+          <div><div style="font-weight:600">Daftar pengeluaran</div><div class="muted small">${expensesInPeriod.length} catatan di periode ini</div></div>
           <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
         </div>
-        <div class="kpi-hero">
-          <div class="label">Total pengeluaran</div>
-          <div class="amount amount-expense">${rupiah(expense)}</div>
-        </div>
-        <div class="kpi-compact" style="margin-bottom:16px">
-          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
-            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
-            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
-          }).join('')}
-        </div>
+
         <div class="tx-list">
-          ${state.expenses.length ? state.expenses.map(e => `
+          ${expensesInPeriod.length ? expensesInPeriod.map(e => `
             <div class="list-row">
               <div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div>
               <div style="display:flex;align-items:center;gap:8px">
@@ -1881,50 +1964,75 @@ function renderReports(main) {
                   <button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
                 </div>
               </div>
-            </div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
+            </div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran di periode ini</div></div>'}
         </div>
       ` : ''}
 
+      ${/* ===== TAB: LAPORAN ===== */ ''}
       ${tab === 'reports' ? `
-        <div class="kpi-hero">
-          <div class="label">Ringkasan Penjualan · ${periodText}</div>
-          <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${active.length} transaksi</div>
-        </div>
-
-        <div class="kpi-grid">
-          <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-          <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
-          <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
-          <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount" style="color:var(--alert)">${rupiah(expenseInPeriod)}</div></div>
-          <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount" style="color:var(--cash)">${rupiah(net)}</div></div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-title">7 hari terakhir</div>
-          <div class="bar-chart">
-            ${last7.map(d => {
-              const h = Math.max(6, (d.total / maxDay) * 100);
-              return `<div class="bar-col">
-                <div class="bar ${d.isToday ? 'today' : ''}" style="height:${h}%" title="${rupiah(d.total)}"></div>
-                <div class="bar-day">${d.label}</div>
-              </div>`;
-            }).join('')}
+        <div class="report-summary-grid">
+          <div class="kpi-hero">
+            <div class="label">Ringkasan Penjualan · ${periodText}</div>
+            <div class="amount">${rupiah(sales)}</div>
+            <div class="delta">${active.length} transaksi</div>
+            <div class="hero-extra">
+              <div class="hero-growth ${salesGrowth.direction === 'up' ? 'pos' : (salesGrowth.direction === 'down' ? 'neg' : '')}">
+                ${growthIcon(salesGrowth.direction)} ${salesGrowth.pct.toFixed(0)}% dari periode lalu
+              </div>
+              <div class="hero-extra-row">
+                <span>Periode lalu</span>
+                <span>${rupiah(prevSales)}</span>
+              </div>
+              <div class="hero-extra-row">
+                <span>Transaksi lalu</span>
+                <span>${prevActive.length}</span>
+              </div>
+            </div>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="label">Cash</div><div class="amount">${kpiAmountHTML(cash)}</div></div>
+            <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${kpiAmountHTML(qris)}</div></div>
+            <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${kpiAmountHTML(voidAmount)}</div></div>
+            <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${kpiAmountHTML(refundAmount)}</div></div>
+            <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount" style="color:var(--alert)">${kpiAmountHTML(expenseInPeriod)}</div></div>
+            <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount" style="color:var(--cash)">${kpiAmountHTML(net)}</div></div>
           </div>
         </div>
 
-        <div class="chart-card">
-          <div class="chart-title">Metode pembayaran</div>
-          <div class="method-row">
-            <span class="method-label">Cash</span>
-            <div class="method-bar"><div class="method-fill cash" style="width:${sales ? (cash/sales*100) : 0}%"></div></div>
-            <span class="method-amount">${rupiah(cash)}</span>
+        <div class="report-charts-grid">
+          <div class="chart-card">
+            <div class="chart-title">7 hari terakhir</div>
+            <div class="bar-chart">
+              ${last7.map(d => {
+                const h = Math.max(6, (d.total / maxDay) * 100);
+                return `<div class="bar-col">
+                  <div class="bar ${d.isToday ? 'today' : ''}" style="height:${h}%" title="${rupiah(d.total)}"></div>
+                  <div class="bar-day">${d.label}</div>
+                </div>`;
+              }).join('')}
+            </div>
           </div>
-          <div class="method-row">
-            <span class="method-label">QRIS</span>
-            <div class="method-bar"><div class="method-fill qris" style="width:${sales ? (qris/sales*100) : 0}%"></div></div>
-            <span class="method-amount">${rupiah(qris)}</span>
+
+          <div class="chart-card">
+            <div class="chart-title">Metode pembayaran</div>
+            <div class="method-block">
+              <div class="method-head">
+                <span class="method-name">Cash</span>
+                <span class="method-nominal">${rupiah(cash)}</span>
+              </div>
+              <div class="method-progress">
+                <div class="method-progress-fill cash" style="width:${sales ? (cash / sales * 100) : 0}%"></div>
+              </div>
+            </div>
+            <div class="method-block">
+              <div class="method-head">
+                <span class="method-name">QRIS</span>
+                <span class="method-nominal">${rupiah(qris)}</span>
+              </div>
+              <div class="method-progress">
+                <div class="method-progress-fill qris" style="width:${sales ? (qris / sales * 100) : 0}%"></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3120,6 +3228,7 @@ function updateSyncIndicator() {
     dot.dataset.status = 'synced';
     banner.hidden = true;
   }
+  renderTabletSidebar();
 }
 $('#sync-indicator').onclick = () => {
   openSheet(`
@@ -3211,6 +3320,8 @@ $('#notif-btn').onclick = () => {
     </div>` : '<div class="empty"><div class="empty-title">Tidak ada notifikasi</div></div>'}
   `);
   $('#notif-dot').style.display = 'none';
+  state.notifications.forEach(n => n.read = true);
+  renderTabletSidebar();
 };
 $('#manage-btn').onclick = () => {
   if (!state.user || state.user.role !== 'owner') return;
@@ -3279,6 +3390,28 @@ function printReceipt(tx) {
   $('#rc-print').onclick = () => { close(); toast('Struk terkirim ke printer', 'success'); };
   pushNav();
 }
+
+// ============================================================
+// BREAKPOINT LISTENER (matchMedia + resize + orientation)
+// ============================================================
+const _mqTablet = window.matchMedia('(min-width: 768px) and (min-height: 600px)');
+
+function _handleTabletChange() {
+  setTimeout(() => {
+    if (typeof renderTabletSidebar === 'function') renderTabletSidebar();
+    if (typeof renderNav === 'function' && state.user) renderNav();
+  }, 50);
+}
+
+if (_mqTablet.addEventListener) _mqTablet.addEventListener('change', _handleTabletChange);
+else if (_mqTablet.addListener) _mqTablet.addListener(_handleTabletChange);
+
+let _tsResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_tsResizeTimer);
+  _tsResizeTimer = setTimeout(_handleTabletChange, 100);
+});
+window.addEventListener('orientationchange', () => setTimeout(_handleTabletChange, 200));
 
 // INIT
 updateSyncIndicator();
