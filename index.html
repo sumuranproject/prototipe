@@ -14,55 +14,178 @@
 
   <!-- LOGIN -->
   <section id="view-login" class="view active">
-    <div class="login-wrap">
-      <div class="login-brand">
-        <div class="brand-mark">SK</div>
-        <h1>SakuKasir</h1>
-        <p class="muted">Point of Sale untuk usaha kamu</p>
-      </div>
-      <form id="login-form" class="card login-card">
-        <label class="field">
-          <span>Username</span>
-          <input type="text" id="login-user" autocomplete="username" placeholder="owner / kasir" required />
-        </label>
-        <label class="field">
-          <span>Password</span>
-          <input type="password" id="login-pass" autocomplete="current-password" required />
-        </label>
-        <p class="hint">Demo: <b>owner</b> atau <b>kasir</b> · password bebas</p>
-        <div id="login-error" class="form-error" hidden></div>
-        <button type="submit" class="btn btn-primary btn-block">Masuk</button>
-        <div class="login-links">
-          <button type="button" class="btn-link" id="show-register">Daftar sebagai Owner</button>
-          <button type="button" class="btn-link" id="show-forgot">Lupa password?</button>
+    <div class="auth-wrap">
+      <div class="auth-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/>
+            <rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/>
+            <circle cx="17" cy="15" r="1.6" fill="var(--primary)"/>
+          </svg>
         </div>
+        <h1>Selamat Datang</h1>
+        <p class="muted">Masuk untuk mengelola bisnis Anda</p>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label class="field-icon">
+          <span>Email / Username</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+            <input type="text" id="login-user" autocomplete="username" placeholder="nama@email.com" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Password</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="login-pass" autocomplete="current-password" placeholder="Masukkan password" required />
+            <button type="button" class="eye-btn" data-eye="login-pass" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <div class="auth-row-end">
+          <button type="button" class="btn-link" id="show-forgot">Lupa Password?</button>
+        </div>
+
+        <div id="login-error" class="form-error" hidden></div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Masuk</button>
       </form>
+
+      <p class="auth-footer">
+        Belum punya akun? <button type="button" class="btn-link-inline" id="show-register">Daftar Sekarang</button>
+      </p>
     </div>
   </section>
 
   <!-- REGISTER -->
   <section id="view-register" class="view">
-    <div class="login-wrap">
-      <div class="login-brand">
-        <div class="brand-mark">SK</div>
-        <h1>Daftar Owner</h1>
-        <p class="muted" id="register-step-label">Tahap 1 dari 2</p>
-      </div>
-      <form id="register-form" class="card login-card">
-        <div id="register-step-1">
-          <div class="step-dots"><span class="active"></span><span></span></div>
-          <label class="field"><span>Username</span><input type="text" id="reg-username" required /></label>
-          <label class="field"><span>Email</span><input type="email" id="reg-email" required /></label>
-          <label class="field"><span>Password</span><input type="password" id="reg-password" minlength="6" required /></label>
-          <label class="field"><span>Nama tampilan</span><input type="text" id="reg-displayname" required /></label>
-          <button type="submit" class="btn btn-primary btn-block">Lanjut</button>
+    <div class="auth-wrap">
+      <button class="back-btn" id="reg-cancel" aria-label="Kembali">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+
+      <div class="auth-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/>
+            <rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/>
+            <circle cx="17" cy="15" r="1.6" fill="var(--primary)"/>
+          </svg>
         </div>
-        <div id="register-step-2" hidden>
-          <div class="step-dots"><span class="done"></span><span class="active"></span></div>
-          <label class="field"><span>Nama bisnis</span><input type="text" id="reg-bizname" required /></label>
-          <label class="field"><span>Tipe bisnis</span>
-            <select id="reg-biztype" required>
-              <option value="">Pilih tipe</option>
+        <h1>Buat Akun SakuKasir</h1>
+        <p class="muted">Daftarkan bisnis Anda untuk menyimpan data di cloud dan tetap bisa digunakan secara offline.</p>
+      </div>
+
+      <form id="register-form" class="auth-form">
+        <label class="field-icon">
+          <span>Nama Lengkap / Bisnis *</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>
+            <input type="text" id="reg-displayname" placeholder="Nama Anda atau Bisnis" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Email *</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+            <input type="email" id="reg-email" placeholder="contoh@email.com" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Password *</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="reg-password" minlength="6" placeholder="Minimal 6 karakter" required />
+            <button type="button" class="eye-btn" data-eye="reg-password" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Konfirmasi Password *</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="reg-password2" placeholder="Ulangi password" required />
+            <button type="button" class="eye-btn" data-eye="reg-password2" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>WhatsApp (Opsional)</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#25D366" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            <input type="tel" id="reg-whatsapp" placeholder="08123456789" />
+          </div>
+        </label>
+
+        <div id="register-error" class="form-error" hidden></div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Daftar</button>
+      </form>
+
+      <p class="auth-footer">
+        Sudah punya akun? <button type="button" class="btn-link-inline" id="show-login">Masuk disini</button>
+      </p>
+    </div>
+  </section>
+
+  <!-- SETUP BISNIS -->
+  <section id="view-setup" class="view">
+    <div class="auth-wrap">
+      <button class="back-btn" id="setup-back" aria-label="Kembali">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+
+      <div class="auth-head-left">
+        <h1>Setup Bisnis</h1>
+        <p class="muted">Lengkapi informasi bisnis Anda</p>
+      </div>
+
+      <form id="setup-form" class="auth-form">
+        <label class="field-icon">
+          <span>Nama Bisnis *</span>
+          <div class="input-wrap">
+            <input type="text" id="setup-name" placeholder="Nama bisnis" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Alamat Bisnis *</span>
+          <div class="input-wrap">
+            <input type="text" id="setup-address" placeholder="Alamat lengkap" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>No Telepon Bisnis *</span>
+          <div class="input-wrap">
+            <input type="tel" id="setup-phone" placeholder="Nomor telepon" required />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Email Bisnis</span>
+          <div class="input-wrap">
+            <input type="email" id="setup-email" readonly />
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Jenis Bisnis *</span>
+          <div class="input-wrap select-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M14 8h4"/><path d="M14 12h4"/><path d="M14 16h4"/></svg>
+            <select id="setup-type" required>
+              <option value="">Pilih jenis bisnis</option>
               <option>Kafe / Coffee Shop</option>
               <option>Restoran</option>
               <option>Warung / Kelontong</option>
@@ -70,39 +193,52 @@
               <option>Jasa</option>
               <option>Lainnya</option>
             </select>
-          </label>
-          <label class="field"><span>Nomor kontak (opsional)</span><input type="tel" id="reg-phone" /></label>
-          <div style="display:flex;gap:8px">
-            <button type="button" class="btn btn-ghost" id="reg-back">Kembali</button>
-            <button type="submit" class="btn btn-primary" style="flex:1">Daftar</button>
           </div>
-        </div>
+        </label>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Selesai Setup</button>
       </form>
-      <button type="button" class="btn-link" id="reg-cancel">Kembali ke login</button>
     </div>
   </section>
 
   <!-- FORGOT -->
   <section id="view-forgot" class="view">
-    <div class="login-wrap">
-      <div class="login-brand">
-        <div class="brand-mark">SK</div>
-        <h1>Lupa password</h1>
-        <p class="muted">Link reset akan dikirim ke email kamu</p>
+    <div class="auth-wrap">
+      <button class="back-btn" id="forgot-cancel" aria-label="Kembali">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+
+      <div class="auth-head-left">
+        <h1>Lupa Password?</h1>
+        <p class="muted">Masukkan email yang terdaftar. Kami akan mengirimkan token untuk mereset password Anda.</p>
       </div>
-      <form id="forgot-form" class="card login-card">
-        <label class="field"><span>Email terdaftar</span><input type="email" id="forgot-email" required /></label>
-        <button type="submit" class="btn btn-primary btn-block">Kirim link reset</button>
+
+      <form id="forgot-form" class="auth-form">
+        <label class="field-icon">
+          <span>Email</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+            <input type="email" id="forgot-email" placeholder="nama@email.com" required />
+          </div>
+        </label>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Kirim Instruksi</button>
       </form>
-      <button type="button" class="btn-link" id="forgot-cancel">Kembali ke login</button>
     </div>
   </section>
 
   <!-- APP -->
   <section id="view-app" class="view">
-    <header class="app-header">
+  <aside class="tablet-sidebar" id="tablet-sidebar" aria-hidden="true"></aside>
+      <header class="app-header">
       <div class="header-left">
-        <div class="brand-mark small" id="brand-mark" role="button" tabindex="0" title="Buka menu kelola">SK</div>
+        <div class="brand-mark small" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/>
+            <rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/>
+            <circle cx="17" cy="15" r="1.6" fill="var(--primary)"/>
+          </svg>
+        </div>
         <button class="outlet-chip" id="outlet-chip">
           <span id="outlet-name">Toko Berkah</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
@@ -119,8 +255,12 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span class="badge-dot" id="notif-dot"></span>
         </button>
-        <button class="icon-btn" id="theme-btn" title="Ganti tema">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <button class="icon-btn" id="manage-btn" title="Kelola">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 3.5h16"/>
+            <path d="M4 12h16"/>
+            <path d="M4 20.5h11"/>
+          </svg>
         </button>
       </div>
     </header>
@@ -135,33 +275,6 @@
     <nav class="bottom-nav" id="bottom-nav"></nav>
   </section>
 
-  <!-- SIDEBAR -->
-  <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
-  <aside id="sidebar" class="sidebar" hidden>
-    <div class="sidebar-header">
-      <div class="brand-mark small" style="cursor:default">SK</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:15px">Kelola</div>
-        <div class="muted small">Menu owner</div>
-      </div>
-      <button class="icon-btn" id="sidebar-close" title="Tutup">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-    </div>
-    <div class="sidebar-body" id="sidebar-body"></div>
-    <div class="sidebar-footer">
-      <button class="sidebar-logout" id="sidebar-logout">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <path d="m16 17 5-5-5-5"/>
-          <path d="M21 12H9"/>
-        </svg>
-        <span>Keluar</span>
-      </button>
-    </div>
-  </aside>
-
-  <!-- SHEET -->
   <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
   <div id="sheet" class="sheet" hidden>
     <div class="sheet-handle"></div>

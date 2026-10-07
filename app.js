@@ -1,6 +1,6 @@
 // PERMISSIONS
 const PERMISSIONS = [
-  { id: 'pos',          label: 'POS',                desc: 'Buat transaksi penjualan' },
+  { id: 'pos',          label: 'Kasir',              desc: 'Buat transaksi penjualan' },
   { id: 'dashboard',    label: 'Dashboard',          desc: 'Ringkasan penjualan kasir' },
   { id: 'transactions', label: 'Transaksi',          desc: 'Lihat riwayat transaksi sendiri' },
   { id: 'shift',        label: 'Shift',              desc: 'Mulai & tutup shift' },
@@ -16,6 +16,8 @@ const PERMISSIONS = [
 // STATE
 const state = {
   user: null,
+  registeredUsers: JSON.parse(localStorage.getItem('sk-users') || '[]'),
+  pendingRegister: null,
   outlet: { id: 1, name: 'Toko Berkah' },
   outlets: [
     { id: 1, name: 'Toko Berkah', address: 'Jl. Merdeka 12', active: true, phone: '0812-1111-2222' },
@@ -32,6 +34,8 @@ const state = {
   auditLog: [],
   activeView: 'pos',
   ownerTab: 'pos',
+  manageRoute: null,
+  reportFilter: { period: 'all', user: 'all', dateFrom: '', dateTo: '' },
   transactions: [
     { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', createdAt: Date.now() - 3600000, items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000, status: 'completed' },
     { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', createdAt: Date.now() - 5000000, items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
@@ -103,13 +107,11 @@ function hasPerm(id) {
   const p = state.user.permissions;
   return Array.isArray(p) ? p.includes(id) : true;
 }
-
 function rupiah(n) {
   const num = Math.round(n);
   const sign = num < 0 ? '-' : '';
   return sign + 'Rp ' + Math.abs(num).toLocaleString('id-ID');
 }
-
 function calculateTotals(cart, discount = 0, taxPct = 0) {
   const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
   const disc = Math.min(Math.max(0, Math.round(discount)), subtotal);
@@ -117,13 +119,18 @@ function calculateTotals(cart, discount = 0, taxPct = 0) {
   const tax = Math.round(afterDisc * (taxPct / 100));
   return { subtotal, discount: disc, taxable: afterDisc, tax, total: afterDisc + tax, taxPct };
 }
-
 function uid(p) { return p + '-' + Date.now().toString(36).slice(-6).toUpperCase(); }
 function nowTime() { return new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); }
 function nowDateTime() {
   return new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+function dateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
 function formatTimestamp(ts) {
   if (!ts) return '-';
   const d = new Date(ts);
@@ -139,7 +146,6 @@ function txAgeMinutes(tx) {
   if (!tx.createdAt) return 0;
   return Math.floor((Date.now() - tx.createdAt) / 60000);
 }
-
 function formatRupiahInput(value) {
   const digits = String(value).replace(/\D/g, '');
   if (!digits) return '';
@@ -162,7 +168,30 @@ function bindRupiahInput(selector, onChange) {
     if (onChange) onChange(parseRupiahInput(formatted));
   });
 }
-
+function periodRange(period, customFrom, customTo) {
+  if (period === 'custom' && customFrom && customTo) return { from: customFrom, to: customTo };
+  const now = new Date();
+  if (period === 'all') return { from: '0000-01-01', to: '9999-12-31' };
+  if (period === 'today') return { from: dateStr(now), to: dateStr(now) };
+  if (period === 'week') {
+    const start = new Date(now); start.setDate(now.getDate() - 6);
+    return { from: dateStr(start), to: dateStr(now) };
+  }
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: dateStr(start), to: dateStr(end) };
+  }
+  if (period === 'lastmonth') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: dateStr(start), to: dateStr(end) };
+  }
+  return { from: dateStr(now), to: dateStr(now) };
+}
+function periodLabel(p) {
+  return ({ all: 'Semua', today: 'Hari ini', week: '7 hari', month: 'Bulan ini', lastmonth: 'Bulan lalu', custom: 'Custom' })[p] || 'Semua';
+}
 function toast(msg, type = '') {
   const host = $('#toast-host');
   const el = document.createElement('div');
@@ -172,18 +201,52 @@ function toast(msg, type = '') {
   setTimeout(() => el.remove(), 2600);
 }
 
+// HISTORY (Android back button)
+let _navDepth = 0;
+function pushNav() {
+  _navDepth++;
+  try { history.pushState({ sk: _navDepth }, '', location.href); } catch (e) {}
+}
+function tryCloseSomething() {
+  if (!$('#sheet').hidden) { closeSheet(); return true; }
+  if ($('#modal-host').innerHTML.trim()) { $('#modal-host').innerHTML = ''; return true; }
+  if ($('#receipt-host').innerHTML.trim()) { $('#receipt-host').innerHTML = ''; return true; }
+  // Auth back button handling
+  if (!state.user) {
+    if ($('#view-setup').classList.contains('active')) { showView('view-register'); return true; }
+    if ($('#view-register').classList.contains('active')) { showView('view-login'); return true; }
+    if ($('#view-forgot').classList.contains('active')) { showView('view-login'); return true; }
+    return false;
+  }
+  if (state.user.role === 'owner') {
+    if (state.manageRoute) { state.manageRoute = null; renderMain(); return true; }
+    if (state.ownerTab === 'manage') { state.ownerTab = 'pos'; renderNav(); renderMain(); return true; }
+    if (state.ownerTab !== 'pos') { state.ownerTab = 'pos'; renderNav(); renderMain(); return true; }
+  } else {
+    const defaultView = hasPerm('pos') ? 'pos' : (hasPerm('dashboard') ? 'dashboard' : (hasPerm('transactions') ? 'transactions' : 'shift'));
+    if (state.activeView !== defaultView) { state.activeView = defaultView; renderNav(); renderMain(); return true; }
+  }
+  return false;
+}
+window.addEventListener('popstate', () => {
+  if (tryCloseSomething()) pushNav();
+});
+window.addEventListener('load', () => { pushNav(); });
+
+// SHEET / MODAL
 function openSheet(html) {
+  const wasHidden = $('#sheet').hidden;
   $('#sheet-content').innerHTML = html;
   $('#sheet').hidden = false;
   $('#sheet-backdrop').hidden = false;
   $('#sheet').scrollTop = 0;
+  if (wasHidden) pushNav();
 }
 function closeSheet() {
   $('#sheet').hidden = true;
   $('#sheet-backdrop').hidden = true;
   $('#sheet-content').innerHTML = '';
 }
-
 function confirmModal(title, msg, confirmLabel, onConfirm, danger = true) {
   const host = $('#modal-host');
   host.innerHTML = `
@@ -201,8 +264,8 @@ function confirmModal(title, msg, confirmLabel, onConfirm, danger = true) {
   $('#modal-cancel').onclick = close;
   $('#modal-bd').onclick = (e) => { if (e.target.id === 'modal-bd') close(); };
   $('#modal-ok').onclick = () => { close(); onConfirm(); };
+  pushNav();
 }
-
 function promptModal(title, label, def, onConfirm) {
   const host = $('#modal-host');
   host.innerHTML = `
@@ -222,8 +285,8 @@ function promptModal(title, label, def, onConfirm) {
   $('#modal-bd').onclick = (e) => { if (e.target.id === 'modal-bd') close(); };
   $('#modal-ok').onclick = () => { const v = $('#prompt-value').value; close(); onConfirm(v); };
   setTimeout(() => $('#prompt-value')?.focus(), 50);
+  pushNav();
 }
-
 function pinModal(title, hint, onConfirm) {
   const host = $('#modal-host');
   host.innerHTML = `
@@ -268,6 +331,7 @@ function pinModal(title, hint, onConfirm) {
   $('#pin-ok').onclick = check;
   inputs[3].onkeydown = (e) => { if (e.key === 'Enter') check(); };
   setTimeout(() => inputs[0].focus(), 100);
+  pushNav();
 }
 
 function applyTheme(t) {
@@ -290,12 +354,10 @@ function pushAudit(type, data) {
   state.auditLog.unshift(entry);
   return entry;
 }
-
 function pushNotif(type, title, body) {
   state.notifications.unshift({ id: Date.now(), type, title, body, time: nowTime(), read: false });
   $('#notif-dot').style.display = '';
 }
-
 function imageViewer(src) {
   const host = document.createElement('div');
   host.className = 'image-viewer-bd';
@@ -307,8 +369,8 @@ function imageViewer(src) {
   document.body.appendChild(host);
   const close = () => host.remove();
   host.onclick = (e) => { if (e.target === host || e.target.closest('.close-x')) close(); };
+  pushNav();
 }
-
 function captureQrisProof(callback) {
   const input = document.createElement('input');
   input.type = 'file';
@@ -333,54 +395,189 @@ function captureQrisProof(callback) {
   input.click();
 }
 
+// ============================================================
 // AUTH
+// ============================================================
 function showView(id) {
   $$('.view').forEach(v => v.classList.remove('active'));
   $('#' + id).classList.add('active');
+  window.scrollTo(0, 0);
 }
 
+// Eye toggle untuk semua password field
+function bindEyeToggles() {
+  $$('.eye-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      const targetId = btn.dataset.eye;
+      const inp = $('#' + targetId);
+      if (!inp) return;
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      btn.innerHTML = show
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="m1 1 22 22"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`;
+    };
+  });
+}
+bindEyeToggles();
+
+// Navigation antar view auth
 $('#show-register').onclick = () => showView('view-register');
 $('#show-forgot').onclick = () => showView('view-forgot');
+$('#show-login').onclick = () => showView('view-login');
 $('#reg-cancel').onclick = () => showView('view-login');
 $('#forgot-cancel').onclick = () => showView('view-login');
+$('#setup-back').onclick = () => showView('view-register');
 
-let regStep = 1;
-$('#register-form').addEventListener('submit', (e) => {
+// ---------- LOGIN ----------
+$('#login-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  if (regStep === 1) {
-    const u = $('#reg-username').value.trim();
-    const em = $('#reg-email').value.trim();
-    const pw = $('#reg-password').value;
-    const dn = $('#reg-displayname').value.trim();
-    if (!u || !em || !pw || !dn) return toast('Lengkapi semua field', 'error');
-    if (pw.length < 6) return toast('Password minimal 6 karakter', 'error');
-    regStep = 2;
-    $('#register-step-1').hidden = true;
-    $('#register-step-2').hidden = false;
-    $('#register-step-label').textContent = 'Tahap 2 dari 2';
-  } else {
-    const bn = $('#reg-bizname').value.trim();
-    const bt = $('#reg-biztype').value;
-    if (!bn || !bt) return toast('Lengkapi data bisnis', 'error');
-    toast('Registrasi berhasil · silakan login', 'success');
-    setTimeout(() => {
-      showView('view-login');
-      $('#login-user').value = $('#reg-username').value;
-      regStep = 1;
-      $('#register-step-1').hidden = false;
-      $('#register-step-2').hidden = true;
-      $('#register-step-label').textContent = 'Tahap 1 dari 2';
-    }, 800);
+  const errEl = $('#login-error');
+  errEl.hidden = true;
+  const user = $('#login-user').value.trim().toLowerCase();
+  const pass = $('#login-pass').value;
+  if (!user || !pass) {
+    errEl.textContent = 'Email dan password wajib diisi.';
+    errEl.hidden = false;
+    return;
   }
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.classList.add('loading');
+  setTimeout(() => {
+    btn.classList.remove('loading');
+
+    // Demo accounts
+    if (user === 'owner' || user === 'owner@sakukasir.com') {
+      state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner', email: 'owner@sakukasir.com' };
+      return enterApp();
+    }
+    if (user === 'kasir') {
+      const w = state.workers.find(x => x.username === 'kasir');
+      state.user = {
+        username: w.username, displayName: w.displayName, role: 'cashier',
+        outlet: w.outlet, permissions: w.permissions,
+      };
+      return enterApp();
+    }
+
+    // User hasil registrasi
+    const reg = state.registeredUsers.find(u =>
+      u.email.toLowerCase() === user || u.name.toLowerCase() === user
+    );
+    if (!reg) {
+      errEl.textContent = 'Email atau password salah.';
+      errEl.hidden = false;
+      return;
+    }
+    if (reg.password !== pass) {
+      errEl.textContent = 'Email atau password salah.';
+      errEl.hidden = false;
+      return;
+    }
+    state.user = {
+      username: reg.email,
+      email: reg.email,
+      displayName: reg.name,
+      role: 'owner',
+    };
+    if (reg.business) {
+      state.outlet = { id: 1, name: reg.business.name, address: reg.business.address, phone: reg.business.phone, active: true };
+      state.outlets = [state.outlet];
+      state.settings.receipt.bizName = reg.business.name;
+    }
+    enterApp();
+  }, 500);
 });
 
-$('#reg-back').onclick = () => {
-  regStep = 1;
-  $('#register-step-1').hidden = false;
-  $('#register-step-2').hidden = true;
-  $('#register-step-label').textContent = 'Tahap 1 dari 2';
-};
+// ---------- REGISTER ----------
+$('#register-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const errEl = $('#register-error');
+  errEl.hidden = true;
+  const name = $('#reg-displayname').value.trim();
+  const email = $('#reg-email').value.trim().toLowerCase();
+  const password = $('#reg-password').value;
+  const password2 = $('#reg-password2').value;
+  const whatsapp = $('#reg-whatsapp').value.trim();
 
+  if (!name || !email || !password || !password2) {
+    errEl.textContent = 'Semua field bertanda * wajib diisi.';
+    errEl.hidden = false;
+    return;
+  }
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    errEl.textContent = 'Format email tidak valid.';
+    errEl.hidden = false;
+    return;
+  }
+  if (password.length < 6) {
+    errEl.textContent = 'Password minimal 6 karakter.';
+    errEl.hidden = false;
+    return;
+  }
+  if (password !== password2) {
+    errEl.textContent = 'Konfirmasi password tidak cocok.';
+    errEl.hidden = false;
+    return;
+  }
+  if (state.registeredUsers.find(u => u.email.toLowerCase() === email)) {
+    errEl.textContent = 'Email sudah terdaftar. Silakan login.';
+    errEl.hidden = false;
+    return;
+  }
+
+  // Simpan sementara, lengkapi setelah setup bisnis
+  state.pendingRegister = { name, email, password, whatsapp };
+
+  // Isi email bisnis di form setup
+  $('#setup-email').value = email;
+  $('#setup-name').value = name;
+  showView('view-setup');
+});
+
+// ---------- SETUP BISNIS ----------
+$('#setup-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!state.pendingRegister) {
+    toast('Data registrasi hilang. Silakan daftar ulang.', 'error');
+    showView('view-register');
+    return;
+  }
+  const bizName = $('#setup-name').value.trim();
+  const bizAddress = $('#setup-address').value.trim();
+  const bizPhone = $('#setup-phone').value.trim();
+  const bizType = $('#setup-type').value;
+
+  if (!bizName || !bizAddress || !bizPhone || !bizType) {
+    toast('Lengkapi semua field wajib.', 'error');
+    return;
+  }
+
+  const user = {
+    ...state.pendingRegister,
+    business: {
+      name: bizName,
+      address: bizAddress,
+      phone: bizPhone,
+      email: state.pendingRegister.email,
+      type: bizType,
+    },
+    createdAt: Date.now(),
+  };
+  state.registeredUsers.push(user);
+  localStorage.setItem('sk-users', JSON.stringify(state.registeredUsers));
+
+  // Pre-fill login
+  $('#login-user').value = user.email;
+  $('#login-pass').value = '';
+
+  state.pendingRegister = null;
+  toast('Akun berhasil dibuat. Silakan login.', 'success');
+  setTimeout(() => showView('view-login'), 600);
+});
+
+// ---------- FORGOT ----------
 $('#forgot-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const em = $('#forgot-email').value.trim();
@@ -389,54 +586,12 @@ $('#forgot-form').addEventListener('submit', (e) => {
   setTimeout(() => showView('view-login'), 900);
 });
 
-$('#login-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const errEl = $('#login-error');
-  errEl.hidden = true;
-  const user = $('#login-user').value.trim().toLowerCase();
-  const pass = $('#login-pass').value;
-  if (!user || !pass) {
-    errEl.textContent = 'Username dan password wajib diisi.';
-    errEl.hidden = false;
-    return;
-  }
-  const btn = e.target.querySelector('button[type=submit]');
-  btn.classList.add('loading');
-  setTimeout(() => {
-    btn.classList.remove('loading');
-    if (user === 'owner') {
-      state.user = { username: 'owner', displayName: 'Budi Santoso', role: 'owner' };
-    } else {
-      const w = state.workers.find(x => x.username === user);
-      if (!w) {
-        errEl.textContent = 'Username atau password salah.';
-        errEl.hidden = false;
-        return;
-      }
-      if (w.password && w.password !== pass) {
-        errEl.textContent = 'Username atau password salah.';
-        errEl.hidden = false;
-        return;
-      }
-      if (!w.active) {
-        errEl.textContent = 'Akun dinonaktifkan. Hubungi owner.';
-        errEl.hidden = false;
-        return;
-      }
-      state.user = {
-        username: w.username,
-        displayName: w.displayName,
-        role: 'cashier',
-        outlet: w.outlet,
-        permissions: w.permissions || ['pos','transactions','shift','printer','sync','theme','profile'],
-      };
-    }
-    enterApp();
-  }, 500);
-});
-
+// ============================================================
+// APP ENTRY
+// ============================================================
 function enterApp() {
   showView('view-app');
+  state.manageRoute = null;
   if (state.user.role === 'cashier') {
     if (hasPerm('pos')) state.activeView = 'pos';
     else if (hasPerm('dashboard')) state.activeView = 'dashboard';
@@ -449,10 +604,8 @@ function enterApp() {
   renderNav();
   renderMain();
   updateSyncIndicator();
-  renderSidebar();
   renderOutletChip();
 }
-
 function handleLogout() {
   if (state.activeShift) {
     confirmModal('Shift masih aktif', 'Tutup shift dulu sebelum keluar. Kalau tetap keluar, shift akan tercatat sebagai anomali.', 'Tetap keluar', doLogout);
@@ -460,11 +613,11 @@ function handleLogout() {
     confirmModal('Keluar dari SakuKasir?', 'Kamu perlu login lagi untuk masuk.', 'Keluar', doLogout, false);
   }
 }
-
 function doLogout() {
   state.user = null;
   state.cart = [];
   state.activeShift = null;
+  state.manageRoute = null;
   showView('view-login');
   $('#login-pass').value = '';
   $('#login-error').hidden = true;
@@ -473,17 +626,24 @@ function doLogout() {
 // NAV
 function renderNav() {
   const nav = $('#bottom-nav');
+  if (!state.user) { nav.innerHTML = ''; return; }
+  const isManage = state.user.role === 'owner' && state.ownerTab === 'manage';
+  if (isManage) {
+    nav.classList.add('hidden');
+    nav.innerHTML = '';
+    return;
+  }
+  nav.classList.remove('hidden');
   if (state.user.role === 'cashier') {
     const items = [];
     if (hasPerm('dashboard'))    items.push(navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>'));
-    if (hasPerm('pos'))          items.push(navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
+    if (hasPerm('pos'))          items.push(navItem('pos', 'Kasir', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
     if (hasPerm('transactions')) items.push(navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>'));
     if (hasPerm('shift'))        items.push(navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'));
-    if (state.activeView === 'checkout') items.push(navItem('checkout', 'Checkout', '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
     nav.innerHTML = items.length ? items.join('') : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
   } else {
     nav.innerHTML = `
-      ${navItem('pos', 'POS',
+      ${navItem('pos', 'Kasir',
         '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>')}
       ${navItem('checkout', 'Checkout',
         '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>')}
@@ -496,12 +656,14 @@ function renderNav() {
       const v = el.dataset.view;
       if (state.user.role === 'cashier') state.activeView = v;
       else state.ownerTab = v;
+      state.manageRoute = null;
+      pushNav();
       renderNav();
       renderMain();
     };
   });
+  renderTabletSidebar();
 }
-
 function navItem(view, label, svgInner) {
   const active = (state.user.role === 'cashier' && state.activeView === view) || (state.user.role === 'owner' && state.ownerTab === view);
   return `
@@ -511,25 +673,152 @@ function navItem(view, label, svgInner) {
     </button>`;
 }
 
+// TABLET SIDEBAR
+function renderTabletSidebar() {
+  const sb = $('#tablet-sidebar');
+  if (!sb) return;
+  if (window.innerWidth < 900) { sb.innerHTML = ''; return; }
+  if (!state.user) { sb.innerHTML = ''; return; }
+
+  const isOwner = state.user.role === 'owner';
+  const currentTab = isOwner ? state.ownerTab : state.activeView;
+  const unread = state.notifications.filter(n => !n.read).length;
+
+  const navItems = isOwner
+    ? [
+        { id: 'pos', label: 'Kasir', icon: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>' },
+        { id: 'checkout', label: 'Checkout', icon: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>' },
+        { id: 'reports', label: 'Laporan', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
+      ]
+    : [
+        hasPerm('dashboard')    && { id: 'dashboard', label: 'Dashboard', icon: '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>' },
+        hasPerm('pos')          && { id: 'pos', label: 'Kasir', icon: '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>' },
+        hasPerm('transactions') && { id: 'transactions', label: 'Transaksi', icon: '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>' },
+        hasPerm('shift')        && { id: 'shift', label: 'Shift', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
+      ].filter(Boolean);
+
+  const brandSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/><rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/><circle cx="17" cy="15" r="1.6" fill="var(--primary)"/></svg>`;
+
+  sb.innerHTML = `
+    <div class="ts-brand">
+      <div class="brand-mark small" aria-hidden="true">${brandSvg}</div>
+      <div class="ts-brand-text">
+        <div class="ts-brand-name">SakuKasir</div>
+        <button class="ts-outlet" id="ts-outlet">
+          <span id="ts-outlet-name">${state.outlet.name}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <nav class="ts-nav">
+      ${navItems.map(it => `
+        <button class="ts-nav-item ${currentTab === it.id ? 'active' : ''}" data-tab="${it.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${it.icon}</svg>
+          <span>${it.label}</span>
+        </button>
+      `).join('')}
+    </nav>
+
+    <div class="ts-section-label">Aksi Cepat</div>
+    <div class="ts-actions">
+      <button class="ts-action" id="ts-sync" title="Sinkronisasi">
+        <span class="sync-dot" data-status="${!state.online ? 'pending' : (state.syncQueue.length > 0 ? 'pending' : 'synced')}"></span>
+        <span>Sinkron</span>
+      </button>
+      <button class="ts-action" id="ts-printer" title="Printer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        <span>Printer</span>
+      </button>
+      <button class="ts-action" id="ts-notif" title="Notifikasi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+        ${unread > 0 ? '<span class="badge-dot"></span>' : ''}
+        <span>Notifikasi</span>
+      </button>
+      ${isOwner ? `
+        <button class="ts-action" id="ts-manage" title="Kelola">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h16"/><path d="M4 12h16"/><path d="M4 20.5h11"/></svg>
+          <span>Kelola</span>
+        </button>
+      ` : ''}
+    </div>
+
+    <div class="ts-spacer"></div>
+
+    <div class="ts-user">
+      <div class="ts-avatar">${state.user.displayName.charAt(0).toUpperCase()}</div>
+      <div class="ts-user-info">
+        <div class="ts-user-name">${state.user.displayName}</div>
+        <div class="ts-user-role">${isOwner ? 'Owner' : 'Kasir'}</div>
+      </div>
+      <button class="icon-btn sm" id="ts-logout" title="Keluar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
+    </div>
+  `;
+
+  // Nav handler
+  $$('#tablet-sidebar .ts-nav-item').forEach(b => {
+    b.onclick = () => {
+      const v = b.dataset.tab;
+      if (isOwner) state.ownerTab = v;
+      else state.activeView = v;
+      state.manageRoute = null;
+      pushNav();
+      renderNav();
+      renderMain();
+    };
+  });
+
+  // Outlet chip
+  const outletBtn = $('#ts-outlet');
+  if (outletBtn) outletBtn.onclick = () => $('#outlet-chip').click();
+
+  // Action shortcuts — trigger handler di header
+  const sSync = $('#ts-sync');
+  if (sSync) sSync.onclick = () => $('#sync-indicator').click();
+  const sPr = $('#ts-printer');
+  if (sPr) sPr.onclick = () => $('#printer-indicator').click();
+  const sNt = $('#ts-notif');
+  if (sNt) sNt.onclick = () => $('#notif-btn').click();
+  const sMg = $('#ts-manage');
+  if (sMg) sMg.onclick = () => $('#manage-btn').click();
+
+  // Logout
+  const sLg = $('#ts-logout');
+  if (sLg) sLg.onclick = handleLogout;
+}
+
 // ROUTER
 function renderMain() {
   const main = $('#main');
+  main.classList.remove('has-sticky-bar');
+  main.classList.remove('no-nav');
+  main.style.paddingBottom = '';
+  $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
+  if (!state.user) return;
   const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
-  if (v === 'pos')        return renderPOS(main);
-  if (v === 'checkout')   return renderCheckout(main);
-  if (v === 'dashboard')  return renderDashboard(main);
+
+  if (v === 'manage') {
+    main.classList.add('no-nav');
+    return renderManage();
+  }
+  if (v === 'pos')          return renderPOS(main);
+  if (v === 'checkout')     return renderCheckout(main);
+  if (v === 'dashboard')    return renderDashboard(main);
   if (v === 'transactions') return renderTransactions(main);
-  if (v === 'shift')      return renderShift(main);
-  if (v === 'reports')    return renderReports(main);
+  if (v === 'shift')        return renderShift(main);
+  if (v === 'reports')      return renderReports(main);
 }
 
 // OUTLET CHIP
 function renderOutletChip() {
   const chip = $('#outlet-chip');
   const nameEl = $('#outlet-name');
+  if (!state.user) { chip.style.display = 'none'; return; }
+  chip.style.display = '';
   const isOwner = state.user.role === 'owner';
   const chev = chip.querySelector('svg');
-
   if (isOwner) {
     nameEl.textContent = state.outlet.name;
     chip.style.cursor = 'pointer';
@@ -576,7 +865,6 @@ function renderPOS(main) {
       ${cats.map((c, i) => `<button class="chip ${i === 0 ? 'active' : ''}" data-cat="${c}">${c}</button>`).join('')}
     </div>
     <div class="product-grid" id="product-grid"></div>
-    <div id="cart-bar-host"></div>
   `;
   renderProductGrid();
   $('#pos-search-input').oninput = renderProductGrid;
@@ -589,7 +877,6 @@ function renderPOS(main) {
   });
   renderCartBar();
 }
-
 function renderProductGrid() {
   const q = ($('#pos-search-input')?.value || '').toLowerCase();
   const cat = $('#cat-row .chip.active')?.dataset.cat || 'Semua';
@@ -602,7 +889,7 @@ function renderProductGrid() {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <div class="empty-title">Produk tidak ditemukan</div>
-      <div class="empty-sub">Coba kata kunci lain, atau tambahkan produk baru via menu Kelola.</div>
+      <div class="empty-sub">Coba kata kunci lain.</div>
     </div>`;
     return;
   }
@@ -611,7 +898,6 @@ function renderProductGrid() {
     el.onclick = () => addToCart(parseInt(el.dataset.id));
   });
 }
-
 function renderProductCard(p) {
   let badge = '';
   if (p.track) {
@@ -626,7 +912,6 @@ function renderProductCard(p) {
       <div class="pprice">${rupiah(p.price)}</div>
     </button>`;
 }
-
 function addToCart(id) {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
@@ -640,89 +925,89 @@ function addToCart(id) {
   renderCartBar();
   toast(`${p.name} ditambahkan`);
 }
-
 function renderCartBar() {
-  const host = $('#cart-bar-host');
-  if (!host) return;
-  if (!state.cart.length) { host.innerHTML = ''; return; }
+  $$('body > .cart-bar').forEach(el => el.remove());
+  if (!state.cart.length) return;
   const count = state.cart.reduce((s, i) => s + i.qty, 0);
   const { total } = calculateTotals(state.cart);
-  host.innerHTML = `
-    <button class="cart-bar" id="cart-bar-btn" aria-label="Buka checkout">
-      <div>
-        <div class="cart-count">${count} item siap dibayar</div>
-        <div class="cart-total">${rupiah(total)}</div>
-      </div>
-      <span class="cart-cta">Lihat Cart</span>
-    </button>`;
-  $('#cart-bar-btn').onclick = () => {
-    if (state.user.role === 'cashier') state.activeView = 'checkout';
-    else state.ownerTab = 'checkout';
-    renderNav();
-    renderMain();
-  };
-}
-
-function openCartSheet() {
-  const { subtotal } = calculateTotals(state.cart);
-  openSheet(`
-    <h3 style="font-size:17px;margin-bottom:4px">Cart · ${state.cart.reduce((s,i)=>s+i.qty,0)} item</h3>
-    <p class="muted small" style="margin:0 0 8px">Tap +/- untuk ubah jumlah</p>
-    <div class="cart-list">
-      ${state.cart.map(item => `
-        <div class="cart-item">
-          <div>
-            <div class="ci-name">${item.name}</div>
-            <div class="ci-price">${rupiah(item.price)} × ${item.qty}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
-            <div class="ci-total">${rupiah(item.price * item.qty)}</div>
-            <div class="qty-ctrl">
-              <button data-act="minus" data-id="${item.id}">−</button>
-              <span class="qty-val">${item.qty}</span>
-              <button data-act="plus" data-id="${item.id}">+</button>
-            </div>
-          </div>
-        </div>`).join('')}
+  if (state.user.role === 'owner') {
+    if (state.ownerTab === 'pos') {
+      const bar = document.createElement('button');
+      bar.type = 'button';
+      bar.className = 'cart-bar';
+      bar.innerHTML = `
+        <div>
+          <div class="cart-count">${count} item</div>
+          <div class="cart-total">${rupiah(total)}</div>
+        </div>
+        <span class="cart-cta">Checkout</span>
+      `;
+      bar.onclick = () => {
+        state.ownerTab = 'checkout';
+        pushNav();
+        renderNav();
+        renderMain();
+      };
+      document.body.appendChild(bar);
+    }
+    return;
+  }
+  const bar = document.createElement('button');
+  bar.type = 'button';
+  bar.className = 'cart-bar';
+  bar.innerHTML = `
+    <div>
+      <div class="cart-count">${count} item</div>
+      <div class="cart-total">${rupiah(total)}</div>
     </div>
-    <div class="summary-row"><span>Subtotal</span><span>${rupiah(subtotal)}</span></div>
-    <div style="display:grid;gap:8px;margin-top:12px">
-      <button class="btn btn-ghost" id="clear-cart">Kosongkan cart</button>
-      <button class="btn btn-primary" id="go-checkout">Bayar · ${rupiah(subtotal)}</button>
-    </div>
-  `);
-  $$('[data-act]').forEach(btn => {
-    btn.onclick = () => {
-      const id = parseInt(btn.dataset.id);
-      const item = state.cart.find(x => x.id === id);
-      if (!item) return;
-      if (btn.dataset.act === 'plus') {
-        const p = state.products.find(x => x.id === id);
-        if (p.track && item.qty >= p.stock) return toast('Stok tidak cukup', 'error');
-        item.qty++;
-      } else {
-        item.qty--;
-        if (item.qty <= 0) state.cart = state.cart.filter(x => x.id !== id);
-      }
-      renderCartBar();
-      if (!state.cart.length) { closeSheet(); return; }
-      openCartSheet();
-    };
-  });
-  $('#clear-cart').onclick = () => {
-    confirmModal('Kosongkan cart?', 'Semua item akan dihapus.', 'Kosongkan', () => {
-      state.cart = [];
-      closeSheet();
-      renderCartBar();
-    });
-  };
-  $('#go-checkout').onclick = () => { closeSheet(); openCheckout(); };
+    <span class="cart-cta">Bayar</span>
+  `;
+  bar.onclick = () => openCheckout();
+  document.body.appendChild(bar);
 }
 
 // CHECKOUT SHEET
 function openCheckout() {
   let method = 'cash', discount = 0, taxPct = 0, cashReceived = 0;
-  let qrisProof = null;
+
+  const completeTransaction = (t, proof) => {
+    const tx = {
+      id: 'TRX-' + todayStr().replace(/-/g, '') + '-' + String(state.transactions.length + 1).padStart(4, '0'),
+      time: nowTime(), date: todayStr(),
+      createdAt: Date.now(),
+      items: state.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+      total: t.total, method,
+      sync: state.online ? 'synced' : 'pending',
+      cashier: state.user.displayName.split(' ')[0],
+      cashierId: state.user.username,
+      outlet: state.user.role === 'cashier' ? state.user.outlet : state.outlet.name,
+      discount: t.discount, tax: t.tax, taxPct: t.taxPct,
+      received: method === 'cash' ? cashReceived : null,
+      change: method === 'cash' ? cashReceived - t.total : 0,
+      status: 'completed',
+      qrisProof: method === 'qris' && proof ? {
+        dataUrl: proof.dataUrl,
+        capturedAt: proof.capturedAt,
+        deviceModel: proof.deviceModel,
+        fileSize: proof.fileSize,
+        expiredAt: proof.capturedAt + (state.settings.qris.retentionDays * 86400000),
+      } : null,
+    };
+    state.transactions.unshift(tx);
+    if (!state.online) state.syncQueue.push({ type: 'transaction', id: tx.id });
+    if (state.activeShift) {
+      state.activeShift.transactions++;
+      if (method === 'cash') state.activeShift.cashSales += t.total;
+      else state.activeShift.qrisSales += t.total;
+    }
+    state.cart.forEach(item => {
+      const p = state.products.find(x => x.id === item.id);
+      if (p && p.track) p.stock = Math.max(0, p.stock - item.qty);
+    });
+    state.cart = [];
+    closeSheet();
+    showSuccess(tx);
+  };
 
   const updateSummary = () => {
     const t = calculateTotals(state.cart, discount, taxPct);
@@ -741,17 +1026,12 @@ function openCheckout() {
       changeEl.style.color = change >= 0 ? 'var(--cash)' : 'var(--text-muted)';
     }
     const payBtn = $('#pay-btn');
-    if (payBtn) {
-      const canPay = method === 'cash' ? cashReceived >= t.total : (qrisProof !== null);
-      payBtn.disabled = !canPay;
-      payBtn.textContent = method === 'qris' && !qrisProof ? 'Ambil bukti QRIS dulu' : 'Bayar ' + rupiah(t.total);
-    }
+    if (payBtn) payBtn.textContent = 'Bayar ' + rupiah(t.total);
   };
 
   const render = () => {
     const t = calculateTotals(state.cart, discount, taxPct);
     const change = cashReceived - t.total;
-    const canPay = method === 'cash' ? cashReceived >= t.total : (qrisProof !== null);
 
     openSheet(`
       <h3 style="font-size:17px;margin-bottom:12px">Pembayaran</h3>
@@ -784,55 +1064,55 @@ function openCheckout() {
           <span id="ck-change" style="color:${change >= 0 ? 'var(--cash)' : 'var(--text-muted)'};font-weight:700">${change >= 0 ? rupiah(change) : '—'}</span>
         </div>
       ` : `
-        <div class="qris-proof-section">
-          ${qrisProof ? `
-            <div class="qris-proof-preview">
-              <img src="${qrisProof.dataUrl}" alt="Bukti QRIS" id="qris-preview-img" />
-            </div>
-            <div class="qris-proof-meta">
-              <span>${Math.round(qrisProof.fileSize / 1024)} KB</span>
-              <span>${formatTimestamp(qrisProof.capturedAt)}</span>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:12px">
-              <button class="btn btn-ghost" id="qris-retake" style="flex:1">Foto ulang</button>
-            </div>
-          ` : `
-            <div class="qris-proof-empty">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              <div style="font-weight:500;color:var(--text);margin-top:4px">Belum ada bukti QRIS</div>
-              <div class="muted small">Bukti WAJIB dari kamera, tidak bisa dari galeri</div>
-              <button class="btn btn-primary" id="qris-capture" style="margin-top:12px">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                Ambil Foto Bukti
-              </button>
-            </div>
-          `}
+        <div class="qris-display">
+          ${state.settings.qris.image
+            ? `<img src="${state.settings.qris.image}" alt="QRIS" style="max-width:220px;margin:0 auto;display:block;border-radius:var(--radius-sm)" />`
+            : `<div class="qris-placeholder">
+                <svg width="140" height="140" viewBox="0 0 100 100" fill="none">
+                  <rect x="4" y="4" width="30" height="30" stroke="currentColor" stroke-width="4"/>
+                  <rect x="14" y="14" width="10" height="10" fill="currentColor"/>
+                  <rect x="66" y="4" width="30" height="30" stroke="currentColor" stroke-width="4"/>
+                  <rect x="76" y="14" width="10" height="10" fill="currentColor"/>
+                  <rect x="4" y="66" width="30" height="30" stroke="currentColor" stroke-width="4"/>
+                  <rect x="14" y="76" width="10" height="10" fill="currentColor"/>
+                  <rect x="44" y="4" width="8" height="8" fill="currentColor"/>
+                  <rect x="56" y="4" width="4" height="8" fill="currentColor"/>
+                  <rect x="44" y="16" width="8" height="4" fill="currentColor"/>
+                  <rect x="56" y="16" width="4" height="4" fill="currentColor"/>
+                  <rect x="44" y="28" width="8" height="8" fill="currentColor"/>
+                  <rect x="44" y="44" width="12" height="12" fill="currentColor"/>
+                  <rect x="60" y="44" width="8" height="8" fill="currentColor"/>
+                  <rect x="72" y="44" width="8" height="8" fill="currentColor"/>
+                  <rect x="84" y="44" width="12" height="8" fill="currentColor"/>
+                  <rect x="44" y="60" width="8" height="8" fill="currentColor"/>
+                  <rect x="66" y="56" width="8" height="8" fill="currentColor"/>
+                  <rect x="76" y="60" width="8" height="8" fill="currentColor"/>
+                  <rect x="44" y="76" width="8" height="8" fill="currentColor"/>
+                  <rect x="60" y="72" width="8" height="8" fill="currentColor"/>
+                  <rect x="72" y="76" width="8" height="8" fill="currentColor"/>
+                  <rect x="84" y="72" width="12" height="12" fill="currentColor"/>
+                </svg>
+                <div class="qris-hint">Scan QR ini untuk membayar</div>
+              </div>`}
+          <div class="muted small" style="margin-top:12px">Setelah customer scan & bayar, tap <b>Bayar</b> untuk foto bukti QRIS.</div>
         </div>
       `}
       <div class="summary-row"><span>Subtotal</span><span id="ck-subtotal">${rupiah(t.subtotal)}</span></div>
       <div class="summary-row"><span>Diskon</span><span id="ck-discount-row" style="color:var(--alert)">${t.discount > 0 ? '-' + rupiah(t.discount) : ''}</span></div>
       <div class="summary-row"><span>Pajak ${taxPct}%</span><span id="ck-tax-row">${t.tax > 0 ? rupiah(t.tax) : ''}</span></div>
-      <div class="payment-sheet-footer">
-        <div class="summary-row total"><span>Total</span><span id="ck-total">${rupiah(t.total)}</span></div>
-        <button class="btn btn-primary btn-block" id="pay-btn" ${canPay ? '' : 'disabled'}>
-          ${method === 'qris' && !qrisProof ? 'Ambil bukti QRIS dulu' : 'Bayar ' + rupiah(t.total)}
-        </button>
+      <div class="summary-row total"><span>Total</span><span id="ck-total">${rupiah(t.total)}</span></div>
+      <div style="display:grid;gap:8px;margin-top:16px">
+        <button type="button" class="btn btn-primary btn-block" id="pay-btn">Bayar ${rupiah(t.total)}</button>
       </div>
     `);
 
-    bindRupiahInput('#in-disc', (val) => {
-      discount = Math.min(val, t.subtotal);
-      updateSummary();
-    });
+    bindRupiahInput('#in-disc', (val) => { discount = Math.min(val, t.subtotal); updateSummary(); });
     $('#in-tax').oninput = (e) => {
       taxPct = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
       updateSummary();
     };
     if ($('#in-cash')) {
-      bindRupiahInput('#in-cash', (val) => {
-        cashReceived = val;
-        updateSummary();
-      });
+      bindRupiahInput('#in-cash', (val) => { cashReceived = val; updateSummary(); });
       $$('[data-quick]').forEach(b => b.onclick = () => {
         cashReceived = parseInt(b.dataset.quick);
         const inp = $('#in-cash');
@@ -843,62 +1123,56 @@ function openCheckout() {
     $('#m-cash').onclick = () => { method = 'cash'; render(); };
     $('#m-qris').onclick = () => { method = 'qris'; render(); };
 
-    if ($('#qris-capture')) {
-      $('#qris-capture').onclick = () => {
-        captureQrisProof((proof) => { qrisProof = proof; render(); toast('Bukti QRIS tersimpan', 'success'); });
-      };
-    }
-    if ($('#qris-retake')) $('#qris-retake').onclick = () => { qrisProof = null; render(); };
-    if ($('#qris-preview-img')) $('#qris-preview-img').onclick = () => imageViewer(qrisProof.dataUrl);
-
-    if (canPay) {
-      $('#pay-btn').onclick = () => {
-        const t = calculateTotals(state.cart, discount, taxPct);
-        const tx = {
-          id: 'TRX-' + todayStr().replace(/-/g, '') + '-' + String(state.transactions.length + 1).padStart(4, '0'),
-          time: nowTime(), date: todayStr(),
-          createdAt: Date.now(),
-          items: state.cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
-          total: t.total, method,
-          sync: state.online ? 'synced' : 'pending',
-          cashier: state.user.displayName.split(' ')[0],
-          cashierId: state.user.username,
-          outlet: state.user.role === 'cashier' ? state.user.outlet : state.outlet.name,
-          discount: t.discount, tax: t.tax, taxPct: t.taxPct,
-          received: method === 'cash' ? cashReceived : null,
-          change: method === 'cash' ? cashReceived - t.total : 0,
-          status: 'completed',
-          qrisProof: method === 'qris' && qrisProof ? {
-            dataUrl: qrisProof.dataUrl,
-            capturedAt: qrisProof.capturedAt,
-            deviceModel: qrisProof.deviceModel,
-            fileSize: qrisProof.fileSize,
-            expiredAt: qrisProof.capturedAt + (state.settings.qris.retentionDays * 86400000),
-          } : null,
-        };
-        state.transactions.unshift(tx);
-        if (!state.online) state.syncQueue.push({ type: 'transaction', id: tx.id });
-        if (state.activeShift) {
-          state.activeShift.transactions++;
-          if (method === 'cash') state.activeShift.cashSales += t.total;
-          else state.activeShift.qrisSales += t.total;
-        }
-        state.cart.forEach(item => {
-          const p = state.products.find(x => x.id === item.id);
-          if (p && p.track) p.stock = Math.max(0, p.stock - item.qty);
+    $('#pay-btn').onclick = () => {
+      const tt = calculateTotals(state.cart, discount, taxPct);
+      if (method === 'cash') {
+        if (cashReceived < tt.total) return toast('Uang diterima kurang dari total', 'error');
+        completeTransaction(tt, null);
+      } else {
+        showQrisCaptureModal(() => {
+          captureQrisProof((proof) => {
+            completeTransaction(tt, proof);
+          });
         });
-        closeSheet();
-        showSuccess(tx);
-      };
-    }
+      }
+    };
   };
   render();
+}
+
+function showQrisCaptureModal(onConfirm) {
+  const host = $('#modal-host');
+  host.innerHTML = `
+    <div class="modal-backdrop" id="qris-modal-bd">
+      <div class="modal">
+        <h3>Bukti QRIS</h3>
+        <p>Pastikan pembayaran sudah diterima. Ambil foto bukti QRIS dari layar customer.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="qris-modal-cancel">Batal</button>
+          <button class="btn btn-primary" id="qris-modal-ok">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Ambil Foto
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  const close = () => host.innerHTML = '';
+  $('#qris-modal-cancel').onclick = close;
+  $('#qris-modal-bd').onclick = e => { if (e.target.id === 'qris-modal-bd') close(); };
+  $('#qris-modal-ok').onclick = () => { close(); onConfirm(); };
+  pushNav();
 }
 
 function showSuccess(tx) {
   const main = $('#main');
   const nav = $('#bottom-nav');
-  nav.style.display = 'none';
+  nav.classList.add('hidden');
+  main.classList.remove('has-sticky-bar');
+  $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
   main.innerHTML = `
     <div class="success-screen">
       <div class="success-icon">
@@ -923,8 +1197,8 @@ function showSuccess(tx) {
     if (state.settings.printer.connected) { toast('Struk sedang dicetak…'); printReceipt(tx); }
     else toast('Printer belum terhubung · struk masuk queue', 'error');
   };
-  $('#new-tx').onclick = () => { state.cart = []; nav.style.display = ''; renderMain(); };
-  $('#view-detail').onclick = () => { nav.style.display = ''; showTxDetail(tx.id); };
+  $('#new-tx').onclick = () => { nav.classList.remove('hidden'); renderNav(); renderMain(); };
+  $('#view-detail').onclick = () => { nav.classList.remove('hidden'); renderNav(); showTxDetail(tx.id); };
 }
 
 // CHECKOUT VIEW
@@ -942,11 +1216,11 @@ function renderCheckout(main) {
     </div>
 
     ${cartCount ? `
-      <div class="checkout-panel checkout-content">
-        <div class="checkout-items">
-          ${state.cart.map(item => `
-            <div class="checkout-item">
-              <div class="ci-main">
+      <div class="checkout-items-list">
+        ${state.cart.map(item => `
+          <div class="checkout-item-card">
+            <div class="ci-top">
+              <div style="flex:1;min-width:0">
                 <div class="ci-name">${item.name}</div>
                 <div class="ci-price">${rupiah(item.price)} × ${item.qty}</div>
               </div>
@@ -955,19 +1229,13 @@ function renderCheckout(main) {
                 <span class="qty-val">${item.qty}</span>
                 <button data-act="plus" data-id="${item.id}">+</button>
               </div>
-              <div class="ci-total">${rupiah(item.price * item.qty)}</div>
             </div>
-          `).join('')}
-        </div>
-        <div class="summary-row"><span>Subtotal</span><span>${rupiah(subtotal)}</span></div>
-        <div class="checkout-note muted small">Periksa item dan jumlah sebelum melanjutkan pembayaran.</div>
-      </div>
-      <div class="checkout-sticky-bar">
-        <div class="checkout-sticky-total">
-          <span>Total</span>
-          <strong>${rupiah(subtotal)}</strong>
-        </div>
-        <button class="btn btn-primary btn-block" id="pay-now">Bayar sekarang</button>
+            <div class="ci-bottom">
+              <span class="ci-subtotal-label">Subtotal</span>
+              <span class="ci-subtotal-value">${rupiah(item.price * item.qty)}</span>
+            </div>
+          </div>
+        `).join('')}
       </div>
     ` : `
       <div class="empty">
@@ -976,24 +1244,21 @@ function renderCheckout(main) {
           <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
         </svg>
         <div class="empty-title">Cart masih kosong</div>
-        <div class="empty-sub">Buka POS untuk memilih produk, lalu kembali ke checkout.</div>
-        <button class="btn btn-primary" id="go-pos">Buka POS</button>
+        <div class="empty-sub">Buka tab Kasir untuk memilih produk.</div>
+        <button class="btn btn-primary" id="go-pos">Buka Kasir</button>
       </div>
     `}
   `;
 
   if ($('#go-pos')) $('#go-pos').onclick = () => {
-    if (state.user.role === 'cashier') state.activeView = 'pos';
-    else state.ownerTab = 'pos';
-    renderNav(); renderMain();
+    state.ownerTab = 'pos'; pushNav(); renderNav(); renderMain();
   };
   if ($('#clear-cart-page')) $('#clear-cart-page').onclick = () => {
     confirmModal('Kosongkan cart?', 'Semua item akan dihapus.', 'Kosongkan', () => {
       state.cart = []; renderCheckout(main);
     });
   };
-  if ($('#pay-now')) $('#pay-now').onclick = () => openCheckout();
-  $$('.checkout-content [data-act]').forEach(btn => {
+  $$('[data-act]').forEach(btn => {
     btn.onclick = () => {
       const id = parseInt(btn.dataset.id);
       const item = state.cart.find(x => x.id === id);
@@ -1007,44 +1272,52 @@ function renderCheckout(main) {
         if (item.qty <= 0) state.cart = state.cart.filter(x => x.id !== id);
       }
       renderCheckout(main);
-      renderCartBar();
     };
   });
+
+  if (cartCount) {
+    const bar = document.createElement('div');
+    bar.className = 'sticky-pay-bar';
+    bar.setAttribute('role', 'button');
+    bar.setAttribute('tabindex', '0');
+    bar.innerHTML = `
+      <div class="spb-info">
+        <div class="spb-count">${cartCount} item</div>
+        <div class="spb-total">${rupiah(subtotal)}</div>
+      </div>
+      <span class="spb-cta">Bayar sekarang</span>
+    `;
+    bar.onclick = () => openCheckout();
+    bar.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCheckout(); } };
+    document.body.appendChild(bar);
+    main.classList.add('has-sticky-bar');
+  }
 }
 
-
+// TRANSACTIONS
 function renderTransactions(main) {
   const isOwner = state.user.role === 'owner';
   const list = isOwner ? state.transactions : state.transactions.filter(t => t.cashierId === state.user.username);
   main.innerHTML = `
     <div class="page-head">
-      <div><h2>Transaksi</h2><div class="sub">Riwayat transaksi · ${list.length} transaksi</div></div>
-    </div>
-    <div class="filter-bar">
-      <button class="chip active">Semua</button>
-      <button class="chip">Cash</button>
-      <button class="chip">QRIS</button>
-      ${isOwner ? '<button class="chip">Semua outlet</button>' : ''}
+      <div><h2>Riwayat Transaksi</h2><div class="sub">${list.length} transaksi</div></div>
     </div>
     <div class="tx-list">
       ${list.length ? list.map(renderTxItem).join('') : `
         <div class="empty">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>
           <div class="empty-title">Belum ada transaksi</div>
-          <div class="empty-sub">Riwayat transaksi akan muncul di sini.</div>
+          <div class="empty-sub">Transaksi akan muncul di sini.</div>
         </div>`}
     </div>`;
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
-
-
 function txStatusBadge(tx) {
   if (tx.status === 'void') return '<span class="tx-status void">⚠ VOID</span>';
   if (tx.status === 'refunded') return '<span class="tx-status refunded">↩ REFUND</span>';
   if (tx.status === 'partial_refund') return '<span class="tx-status partial">↩ PARTIAL</span>';
   return '';
 }
-
 function renderTxItem(tx) {
   const sl = { synced: '✓', pending: '⏳', error: '⚠' }[tx.sync];
   const statusClass = tx.status === 'void' ? 'void'
@@ -1064,14 +1337,13 @@ function renderTxItem(tx) {
       ${refundNote}
     </button>`;
 }
-
 function showTxDetail(id) {
   const tx = state.transactions.find(t => t.id === id);
   if (!tx) return;
   const isOwner = state.user.role === 'owner';
   const isToday = tx.date === todayStr();
   const isMyTx = tx.cashierId === state.user.username;
-  const canVoidBase = tx.status === 'completed' && isToday;
+  const canVoidBase = tx.status === 'completed' && (isOwner || isToday);
   const canVoid = canVoidBase && (isOwner || (isMyTx && hasPerm('void')));
   const canRefund = (tx.status === 'completed' || tx.status === 'partial_refund') &&
     (isOwner || (isMyTx && hasPerm('refund')));
@@ -1111,6 +1383,9 @@ function showTxDetail(id) {
     }
   }
 
+  const showActions = canVoid || canRefund;
+  const isSingle = !(canVoid && canRefund);
+
   openSheet(`
     <h3 style="font-size:17px;margin-bottom:4px">${tx.id}</h3>
     <p class="muted small" style="margin:0 0 16px">${tx.date} · ${tx.time} · ${tx.outlet}</p>
@@ -1139,8 +1414,8 @@ function showTxDetail(id) {
       <div class="summary-row"><span>Kembalian</span><span>${rupiah(tx.change)}</span></div>` : ''}
     <div style="display:grid;gap:8px;margin-top:16px">
       <button class="btn btn-primary btn-block" id="print-again">Cetak ulang struk</button>
-      ${(canVoid || canRefund) ? `
-        <div class="tx-actions-2">
+      ${showActions ? `
+        <div class="tx-actions-2 ${isSingle ? 'single' : ''}">
           ${canVoid ? '<button class="btn btn-danger" id="void-btn">Void</button>' : ''}
           ${canRefund ? '<button class="btn btn-ghost" id="refund-btn">Refund</button>' : ''}
         </div>` : ''}
@@ -1455,76 +1730,15 @@ function renderDashboard(main) {
   const today = todayStr();
   const todayTx = state.transactions.filter(t => t.date === today);
   const active = todayTx.filter(t => t.status !== 'void');
-  const voided = todayTx.filter(t => t.status === 'void');
-  const refunded = todayTx.filter(t => t.status === 'refunded' || t.status === 'partial_refund');
-
   const totalSales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
   const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-  const expense = state.expenses.filter(e => e.date.startsWith(today)).reduce((s, e) => s + e.amount, 0);
-  const voidAmount = voided.reduce((s, t) => s + t.total, 0);
-  const refundAmount = refunded.reduce((s, t) => s + (t.refundAmount || 0), 0);
-  const net = totalSales - expense;
-
-  if (state.user.role === 'cashier') {
-    main.innerHTML = `
-      <div class="page-head">
-        <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
-          <div class="sub">Ringkasan shift kamu</div></div>
-      </div>
-      <div class="kpi-hero">
-        <div class="label">Penjualan hari ini</div>
-        <div class="amount">${rupiah(totalSales)}</div>
-        <div class="delta">${active.length} transaksi</div>
-      </div>
-      <div class="kpi-grid">
-        <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-        <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-      </div>
-      ${state.activeShift ? `
-        <div class="shift-card">
-          <div class="shift-status">Shift aktif</div>
-          <div class="muted small">Mulai ${state.activeShift.startTime}</div>
-          <div class="shift-rows">
-            <div class="shift-row"><span class="lbl">Transaksi</span><span class="val">${state.activeShift.transactions}</span></div>
-            <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(state.activeShift.cashSales + state.activeShift.qrisSales)}</span></div>
-          </div>
-        </div>` : ''}
-      <div class="section-title">Transaksi terbaru</div>
-      <div class="tx-list">${todayTx.slice(0, 5).map(renderTxItem).join('') || '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}</div>
-    `;
-    $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
-    return;
-  }
-
-  const cashierRecap = {};
-  todayTx.forEach(t => {
-    const key = t.cashier;
-    if (!cashierRecap[key]) cashierRecap[key] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
-    if (t.status === 'void') { cashierRecap[key].voidCount++; cashierRecap[key].voidAmount += t.total; }
-    if (t.status === 'refunded' || t.status === 'partial_refund') {
-      cashierRecap[key].refundCount++;
-      cashierRecap[key].refundAmount += (t.refundAmount || 0);
-    }
-  });
-
-  const threshold = state.settings.security.alertVoidPerDay;
-  const alerts = Object.entries(cashierRecap).filter(([_, r]) => r.voidCount >= threshold);
-  const alertHtml = alerts.map(([name, r]) => `
-    <div class="alert-card">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
-      <div>
-        <div class="ac-title">Alert: ${name} void ${r.voidCount}× hari ini</div>
-        <div class="ac-body">Total ${rupiah(r.voidAmount)}. Melebihi ambang batas ${threshold}×/hari.</div>
-      </div>
-    </div>`).join('');
 
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Halo, ${state.user.displayName.split(' ')[0]}</h2>
-        <div class="sub">Ringkasan hari ini</div></div>
+        <div class="sub">Ringkasan shift kamu</div></div>
     </div>
-    ${alertHtml}
     <div class="kpi-hero">
       <div class="label">Penjualan hari ini</div>
       <div class="amount">${rupiah(totalSales)}</div>
@@ -1533,141 +1747,187 @@ function renderDashboard(main) {
     <div class="kpi-grid">
       <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
       <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-      <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
-      <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
     </div>
-    <div class="kpi-grid">
-      <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
-      <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount">${rupiah(net)}</div></div>
-    </div>
-    ${Object.keys(cashierRecap).length ? `
-      <div class="section-title">Rekap void/refund per kasir</div>
-      <div class="tx-list">
-        ${Object.entries(cashierRecap).map(([name, r]) => `
-          <div class="cashier-recap-row">
-            <div>
-              <div class="cr-name">${name}</div>
-              <div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div>
-            </div>
-            <div class="cr-amount">
-              ${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    ` : ''}
-    <div class="chart-card">
-      <div class="chart-title">7 hari terakhir</div>
-      <div class="bar-chart">
-        ${[1200, 1800, 1400, 2100, 1900, 2200, Math.round(totalSales/1000)].map((v, i) => {
-          const max = Math.max(1200, 1800, 1400, 2100, 1900, 2200, Math.round(totalSales/1000), 1000);
-          const h = Math.max(8, (v / max) * 100);
-          const days = ['S','S','R','K','J','S','M'];
-          return `<div class="bar-col"><div class="bar ${i === 6 ? 'today' : ''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`;
-        }).join('')}
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Metode pembayaran</div>
-      <div class="method-row">
-        <span class="method-label">Cash</span>
-        <div class="method-bar"><div class="method-fill cash" style="width:${totalSales ? (cash/totalSales*100) : 0}%"></div></div>
-        <span class="method-amount">${rupiah(cash)}</span>
-      </div>
-      <div class="method-row">
-        <span class="method-label">QRIS</span>
-        <div class="method-bar"><div class="method-fill qris" style="width:${totalSales ? (qris/totalSales*100) : 0}%"></div></div>
-        <span class="method-amount">${rupiah(qris)}</span>
-      </div>
-    </div>
+    ${state.activeShift ? `
+      <div class="shift-card">
+        <div class="shift-status">Shift aktif</div>
+        <div class="muted small">Mulai ${state.activeShift.startTime}</div>
+        <div class="shift-rows">
+          <div class="shift-row"><span class="lbl">Transaksi</span><span class="val">${state.activeShift.transactions}</span></div>
+          <div class="shift-row"><span class="lbl">Total penjualan</span><span class="val">${rupiah(state.activeShift.cashSales + state.activeShift.qrisSales)}</span></div>
+        </div>
+      </div>` : ''}
     <div class="section-title">Transaksi terbaru</div>
-    <div class="tx-list">${todayTx.slice(0, 4).map(renderTxItem).join('')}</div>
+    <div class="tx-list">${todayTx.slice(0, 5).map(renderTxItem).join('') || '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}</div>
   `;
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
 // REPORTS
 function renderReports(main) {
-  let tab = 'reports';
+  let tab = 'transactions';
   const TABS = [
-    { id: 'reports', label: 'Laporan', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
-    { id: 'expenses', label: 'Pengeluaran', icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14" r="1"/>' },
+    { id: 'transactions', label: 'Transaksi',
+      icon: '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>' },
+    { id: 'expenses', label: 'Pengeluaran',
+      icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14" r="1"/>' },
+    { id: 'reports', label: 'Laporan',
+      icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
   ];
-  let period = 'today';
-  let userFilter = 'all';
-
-  const getRange = () => {
-    const today = todayStr();
-    const d = new Date(today + 'T00:00:00');
-    if (period === '7d') d.setDate(d.getDate() - 6);
-    if (period === '30d') d.setDate(d.getDate() - 29);
-    return { from: d.toISOString().slice(0,10), to: today };
-  };
-  const periodLabel = () => ({ today: 'Hari ini', '7d': '7 hari terakhir', '30d': '30 hari terakhir' }[period] || 'Hari ini');
 
   const render = () => {
-    const range = getRange();
-    let filteredTx = state.transactions.filter(t => t.date >= range.from && t.date <= range.to);
-    if (userFilter !== 'all') filteredTx = filteredTx.filter(t => t.cashierId === userFilter);
-    let filteredExpenses = state.expenses.filter(e => e.date.slice(0,10) >= range.from && e.date.slice(0,10) <= range.to);
-    if (userFilter !== 'all') filteredExpenses = filteredExpenses.filter(e => {
-      const w = state.workers.find(x => x.username === userFilter);
-      return !w || e.by === w.displayName || e.by === w.displayName.split(' ')[0];
-    });
+    const rf = state.reportFilter;
+    const range = periodRange(rf.period, rf.dateFrom, rf.dateTo);
+    const allInPeriod = state.transactions.filter(t => t.date >= range.from && t.date <= range.to);
+    const userList = allInPeriod.filter(t => rf.user === 'all' ? true : t.cashierId === rf.user);
 
-    const active = filteredTx.filter(t => t.status !== 'void');
+    const active = userList.filter(t => t.status !== 'void');
     const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-    const discount = filteredTx.reduce((s, t) => s + (t.discount || 0), 0);
-    const tax = filteredTx.reduce((s, t) => s + (t.tax || 0), 0);
-    const voidAmount = filteredTx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
-    const refundAmount = filteredTx.reduce((s, t) => s + (t.refundAmount || 0), 0);
-    const expense = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-    const net = sales - expense;
+    const discount = userList.reduce((s, t) => s + (t.discount || 0), 0);
+    const tax = userList.reduce((s, t) => s + (t.tax || 0), 0);
+    const voidAmount = userList.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
+    const refundAmount = userList.reduce((s, t) => s + (t.refundAmount || 0), 0);
+    const expenseInPeriod = state.expenses.filter(e => {
+      const ed = e.date.slice(0, 10);
+      return ed >= range.from && ed <= range.to;
+    }).reduce((s, e) => s + e.amount, 0);
+    const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
+    const net = sales - expenseInPeriod;
     const gross = sales + discount;
+
+    const last7 = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const ds = dateStr(d);
+      const txs = state.transactions.filter(t => t.date === ds && t.status !== 'void');
+      const total = txs.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+      const dayNames = ['M', 'S', 'S', 'R', 'K', 'J', 'S'];
+      last7.push({ date: ds, label: dayNames[d.getDay()], total, isToday: i === 0 });
+    }
+    const maxDay = Math.max(...last7.map(d => d.total), 1);
+
+    const cashierRecap = {};
+    userList.forEach(t => {
+      const k = t.cashier;
+      if (!cashierRecap[k]) cashierRecap[k] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
+      if (t.status === 'void') { cashierRecap[k].voidCount++; cashierRecap[k].voidAmount += t.total; }
+      if (t.status === 'refunded' || t.status === 'partial_refund') {
+        cashierRecap[k].refundCount++;
+        cashierRecap[k].refundAmount += (t.refundAmount || 0);
+      }
+    });
 
     const byOutlet = {};
     active.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + (t.total - (t.refundAmount || 0)); });
     const byCashier = {};
     active.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + (t.total - (t.refundAmount || 0)); });
-    const cashierRecap = {};
-    filteredTx.forEach(t => {
-      const k = t.cashier;
-      if (!cashierRecap[k]) cashierRecap[k] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
-      if (t.status === 'void') { cashierRecap[k].voidCount++; cashierRecap[k].voidAmount += t.total; }
-      if (t.status === 'refunded' || t.status === 'partial_refund') {
-        cashierRecap[k].refundCount++; cashierRecap[k].refundAmount += (t.refundAmount || 0);
-      }
-    });
+
+    const periodText = rf.period === 'custom' ? `${rf.dateFrom} → ${rf.dateTo}` : periodLabel(rf.period);
+    const userText = rf.user === 'all' ? 'Semua kasir' : (state.workers.find(w => w.username === rf.user)?.displayName || rf.user);
 
     main.innerHTML = `
       <div class="page-head">
-        <div><h2>Laporan</h2><div class="sub">${periodLabel()}${userFilter !== 'all' ? ' · ' + (state.workers.find(w => w.username === userFilter)?.displayName || userFilter) : ''}</div></div>
+        <div><h2>Laporan</h2><div class="sub">${periodText} · ${userText}</div></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost" id="report-filter">Filter</button>
-          <button class="btn btn-ghost" id="export">Export XLSX</button>
+          <button class="btn btn-ghost" id="open-filter">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>
+            Filter
+          </button>
+          <button class="btn btn-ghost" id="export">Export</button>
         </div>
       </div>
 
       <div class="seg-tabs" role="tablist">
-        ${TABS.map(t => `<button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span>
-        </button>`).join('')}
+        ${TABS.map(t => `
+          <button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+            <span>${t.label}</span>
+          </button>
+        `).join('')}
       </div>
 
+      ${tab === 'transactions' ? `
+        <div class="tx-list">
+          ${userList.length ? userList.map(renderTxItem).join('') : '<div class="empty"><div class="empty-title">Belum ada transaksi</div><div class="empty-sub">Coba ubah filter atau periode.</div></div>'}
+        </div>
+      ` : ''}
+
+      ${tab === 'expenses' ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${state.expenses.length} catatan</div></div>
+          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
+        </div>
+        <div class="kpi-hero">
+          <div class="label">Total pengeluaran</div>
+          <div class="amount amount-expense">${rupiah(expense)}</div>
+        </div>
+        <div class="kpi-compact" style="margin-bottom:16px">
+          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
+            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
+            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
+          }).join('')}
+        </div>
+        <div class="tx-list">
+          ${state.expenses.length ? state.expenses.map(e => `
+            <div class="list-row">
+              <div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
+                <div class="row-actions">
+                  <button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                  <button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+                </div>
+              </div>
+            </div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
+        </div>
+      ` : ''}
+
       ${tab === 'reports' ? `
-        <div class="kpi-hero"><div class="label">Penjualan</div><div class="amount">${rupiah(sales)}</div><div class="delta">${active.length} transaksi</div></div>
+        <div class="kpi-hero">
+          <div class="label">Ringkasan Penjualan · ${periodText}</div>
+          <div class="amount">${rupiah(sales)}</div>
+          <div class="delta">${active.length} transaksi</div>
+        </div>
+
         <div class="kpi-grid">
           <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
           <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
           <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
           <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
+          <div class="kpi-card"><div class="label">Pengeluaran</div><div class="amount" style="color:var(--alert)">${rupiah(expenseInPeriod)}</div></div>
+          <div class="kpi-card"><div class="label">Laba bersih</div><div class="amount" style="color:var(--cash)">${rupiah(net)}</div></div>
         </div>
-        <div class="section-title">Rekap per kasir</div>
-        <div class="tx-list">
-          ${Object.entries(cashierRecap).map(([name, r]) => `<div class="cashier-recap-row"><div><div class="cr-name">${name}</div><div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div></div><div class="cr-amount">${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data rekap</div></div>'}
+
+        <div class="chart-card">
+          <div class="chart-title">7 hari terakhir</div>
+          <div class="bar-chart">
+            ${last7.map(d => {
+              const h = Math.max(6, (d.total / maxDay) * 100);
+              return `<div class="bar-col">
+                <div class="bar ${d.isToday ? 'today' : ''}" style="height:${h}%" title="${rupiah(d.total)}"></div>
+                <div class="bar-day">${d.label}</div>
+              </div>`;
+            }).join('')}
+          </div>
         </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Metode pembayaran</div>
+          <div class="method-row">
+            <span class="method-label">Cash</span>
+            <div class="method-bar"><div class="method-fill cash" style="width:${sales ? (cash/sales*100) : 0}%"></div></div>
+            <span class="method-amount">${rupiah(cash)}</span>
+          </div>
+          <div class="method-row">
+            <span class="method-label">QRIS</span>
+            <div class="method-bar"><div class="method-fill qris" style="width:${sales ? (qris/sales*100) : 0}%"></div></div>
+            <span class="method-amount">${rupiah(qris)}</span>
+          </div>
+        </div>
+
         <div class="section-title">Ringkasan keuangan</div>
         <div class="waterfall">
           <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
@@ -1676,184 +1936,227 @@ function renderReports(main) {
           ${voidAmount > 0 ? `<div class="shift-row"><span class="lbl">Void</span><span class="val" style="color:var(--alert)">- ${rupiah(voidAmount)}</span></div>` : ''}
           ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
           <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
-          <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
-          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px"><span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span><span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span></div>
+          <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expenseInPeriod)}</span></div>
+          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
+            <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
+            <span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span>
+          </div>
         </div>
-        <div class="kpi-compact"><div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div><div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div></div>
+
+        <div class="section-title">Rekap void/refund per kasir</div>
+        <div class="tx-list">
+          ${Object.keys(cashierRecap).length
+            ? Object.entries(cashierRecap).map(([name, r]) => `
+              <div class="cashier-recap-row">
+                <div><div class="cr-name">${name}</div><div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div></div>
+                <div class="cr-amount">${(r.voidAmount + r.refundAmount) > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}</div>
+              </div>`).join('')
+            : '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
+        </div>
+
         <div class="section-title">Penjualan per outlet</div>
-        <div class="tx-list">${Object.entries(byOutlet).map(([name,total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}</div>
+        <div class="tx-list">
+          ${Object.entries(byOutlet).map(([name, total]) => `
+            <div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>
+          `).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
+        </div>
+
         <div class="section-title">Penjualan per kasir</div>
-        <div class="tx-list">${Object.entries(byCashier).map(([name,total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}</div>
-        <div class="chart-card"><div class="chart-title">7 hari terakhir</div><div class="bar-chart">
-          ${[1200,1800,1400,2100,1900,2200,Math.round(sales/1000)].map((v,i)=>{const max=Math.max(2200,Math.round(sales/1000),1000);const h=Math.max(8,(v/max)*100);const days=['S','S','R','K','J','S','M'];return `<div class="bar-col"><div class="bar ${i===6?'today':''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`}).join('')}
-        </div></div>
-        <div class="chart-card"><div class="chart-title">Metode pembayaran</div>
-          <div class="method-row"><span class="method-label">Cash</span><div class="method-bar"><div class="method-fill cash" style="width:${sales ? cash/sales*100 : 0}%"></div></div><span class="method-amount">${rupiah(cash)}</span></div>
-          <div class="method-row"><span class="method-label">QRIS</span><div class="method-bar"><div class="method-fill qris" style="width:${sales ? qris/sales*100 : 0}%"></div></div><span class="method-amount">${rupiah(qris)}</span></div>
+        <div class="tx-list">
+          ${Object.entries(byCashier).map(([name, total]) => `
+            <div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>
+          `).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
         </div>
-      ` : `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${filteredExpenses.length} catatan · ${periodLabel()}</div></div>
-          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
-        </div>
-        <div class="kpi-hero"><div class="label">Total pengeluaran</div><div class="amount amount-expense">${rupiah(expense)}</div></div>
-        <div class="kpi-compact" style="margin-bottom:16px">${['Bahan','Operasional','Gaji','Lainnya'].map(cat=>{const sum=filteredExpenses.filter(e=>e.category===cat).reduce((s,e)=>s+e.amount,0);return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`}).join('')}</div>
-        <div class="tx-list">${filteredExpenses.length ? filteredExpenses.map(e=>`<div class="list-row"><div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div><div style="display:flex;align-items:center;gap:8px"><div class="row-amount amount-expense">-${rupiah(e.amount)}</div><div class="row-actions"><button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div></div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}</div>
-      `}
+      ` : ''}
     `;
 
     $$('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-    $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
-    $('#report-filter').onclick = () => openReportFilter();
+    if ($('#export')) $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+    if ($('#open-filter')) $('#open-filter').onclick = () => openFilterSheet(render);
 
     if (tab === 'expenses') {
-      const CATS = ['Bahan','Operasional','Gaji','Lainnya'];
+      const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
       $('#add-exp-report').onclick = () => expForm(null, CATS, render);
       $$('[data-edit-exp]').forEach(b => b.onclick = () => expForm(b.getAttribute('data-edit-exp'), CATS, render));
       $$('[data-del-exp]').forEach(b => b.onclick = () => {
-        const id = b.getAttribute('data-del-exp'); const e = state.expenses.find(x => x.id === id); if (!e) return;
-        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => { state.expenses = state.expenses.filter(x => x.id !== id); render(); toast('Pengeluaran dihapus'); });
+        const id = b.getAttribute('data-del-exp');
+        const e = state.expenses.find(x => x.id === id);
+        if (!e) return;
+        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
+          state.expenses = state.expenses.filter(x => x.id !== id);
+          render();
+          toast('Pengeluaran dihapus');
+        });
       });
     }
     $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
   };
-
-  function openReportFilter() {
-    openSheet(`
-      <h3 style="font-size:17px;margin-bottom:14px">Filter laporan</h3>
-      <div class="section-title" style="margin-top:0">Periode waktu</div>
-      <div class="filter-choice-grid">
-        <button class="btn ${period==='today'?'btn-primary':'btn-ghost'}" data-period="today">Hari ini</button>
-        <button class="btn ${period==='7d'?'btn-primary':'btn-ghost'}" data-period="7d">7 hari</button>
-        <button class="btn ${period==='30d'?'btn-primary':'btn-ghost'}" data-period="30d">30 hari</button>
-      </div>
-      <div class="section-title">User / kasir</div>
-      <label class="field"><span>Filter per user</span><select id="report-user-filter"><option value="all">Semua user</option>${state.workers.filter(w=>w.active).map(w=>`<option value="${w.username}" ${userFilter===w.username?'selected':''}>${w.displayName}</option>`).join('')}</select></label>
-      <button class="btn btn-primary btn-block" id="apply-report-filter" style="margin-top:16px">Terapkan filter</button>
-    `);
-    $$('[data-period]').forEach(b => b.onclick = () => { period=b.dataset.period; openReportFilter(); });
-    $('#apply-report-filter').onclick = () => { userFilter=$('#report-user-filter').value; closeSheet(); render(); };
-  }
   render();
 }
 
+// FILTER SHEET
+function openFilterSheet(onApply) {
+  const rf = state.reportFilter;
+  const PERIODS = [
+    { id: 'all', label: 'Semua' },
+    { id: 'today', label: 'Hari ini' },
+    { id: 'week', label: '7 hari' },
+    { id: 'month', label: 'Bulan ini' },
+    { id: 'lastmonth', label: 'Bulan lalu' },
+    { id: 'custom', label: 'Custom' },
+  ];
+  const userOptions = [
+    { id: 'all', label: 'Semua kasir' },
+    ...state.workers.map(w => ({ id: w.username, label: w.displayName })),
+  ];
 
-function renderSidebar() {
-  const body = $('#sidebar-body');
-  if (!body) return;
-  const isOwner = state.user.role === 'owner';
+  let period = rf.period;
+  let user = rf.user;
+  let dateFrom = rf.dateFrom || todayStr();
+  let dateTo = rf.dateTo || todayStr();
 
-  if (isOwner) {
-    const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
-    const outCount = state.products.filter(p => p.track && p.stock === 0).length;
-    const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
-    const groups = [
-      { id: 'katalog', title: 'Katalog', items: [
-        { label: 'Produk', route: 'products', count: state.products.length },
-        { label: 'Kategori', route: 'categories', count: state.categories.length },
-        { label: 'Stok', route: 'inventory', badge: stockBadge },
-      ]},
-      { id: 'bisnis', title: 'Bisnis', items: [
-        { label: 'Outlet', route: 'outlets', count: state.outlets.length },
-        { label: 'Kasir', route: 'workers', count: state.workers.length },
-      ]},
-      { id: 'pengaturan', title: 'Pengaturan', items: [
-        { label: 'QRIS', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
-        { label: 'Printer', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
-        { label: 'Struk', route: 'receipt' },
-        { label: 'Notifikasi', route: 'notif-settings' },
-        { label: 'Sinkronisasi', route: 'sync-settings', count: state.syncQueue.length || null },
-        { label: 'Keamanan', route: 'security-settings' },
-        { label: 'Audit Log', route: 'audit-log', count: state.auditLog.length || null },
-        { label: 'Tema', route: 'theme-settings', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } },
-        { label: 'Profil', route: 'profile' },
-        { label: 'Tentang', route: 'about' },
-      ]},
-    ];
-    body.innerHTML = groups.map(g => `
-      <div class="sidebar-accordion open" data-acc="${g.id}">
-        <button class="sidebar-accordion-header" type="button">
-          <span>${g.title}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </button>
-        <div class="sidebar-accordion-body">
-          ${g.items.map(it => `
-            <button class="sidebar-item" data-route="${it.route}">
-              <span class="si-label">${it.label}</span>
-              ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
-              ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
-            </button>
-          `).join('')}
-        </div>
+  const renderSheet = () => {
+    openSheet(`
+      <h3 style="font-size:17px;margin-bottom:12px">Filter Laporan</h3>
+
+      <div class="section-title" style="margin-top:0">Periode</div>
+      <div class="chip-row" id="filter-period-row">
+        ${PERIODS.map(p => `<button class="chip ${period === p.id ? 'active' : ''}" data-p="${p.id}">${p.label}</button>`).join('')}
       </div>
-    `).join('');
-    body.querySelectorAll('.sidebar-accordion-header').forEach(h => {
-      h.onclick = () => h.parentElement.classList.toggle('open');
+      ${period === 'custom' ? `
+        <div class="form-row" style="margin-top:12px;margin-bottom:8px">
+          <label class="field"><span>Dari</span><input type="date" id="f-from" value="${dateFrom}" /></label>
+          <label class="field"><span>Sampai</span><input type="date" id="f-to" value="${dateTo}" /></label>
+        </div>
+      ` : ''}
+
+      <div class="section-title">Kasir</div>
+      <div class="tx-list">
+        ${userOptions.map(u => `
+          <button class="list-row" data-u="${u.id}">
+            <div><div class="row-title">${u.label}</div></div>
+            ${user === u.id ? '<span style="color:var(--primary);font-weight:600">Aktif</span>' : ''}
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="form-actions" style="margin-top:16px">
+        <button class="btn btn-ghost" id="f-reset">Reset</button>
+        <button class="btn btn-primary" id="f-apply">Terapkan</button>
+      </div>
+    `);
+
+    $$('#filter-period-row .chip').forEach(b => b.onclick = () => {
+      period = b.dataset.p;
+      renderSheet();
     });
-    body.querySelectorAll('[data-route]').forEach(el => {
-      el.onclick = () => { closeSidebar(); routeManage(el.dataset.route); };
+    if ($('#f-from')) $('#f-from').oninput = e => { dateFrom = e.target.value; };
+    if ($('#f-to')) $('#f-to').oninput = e => { dateTo = e.target.value; };
+    $$('[data-u]').forEach(b => b.onclick = () => {
+      user = b.dataset.u;
+      renderSheet();
     });
-    return;
+    $('#f-reset').onclick = () => {
+      period = 'all';
+      user = 'all';
+      dateFrom = todayStr();
+      dateTo = todayStr();
+      renderSheet();
+    };
+    $('#f-apply').onclick = () => {
+      state.reportFilter = { period, user, dateFrom, dateTo };
+      closeSheet();
+      onApply();
+    };
+  };
+  renderSheet();
+}
+
+// MANAGE PAGE
+function backToManageBtn() {
+  return `<button class="icon-btn" id="back-manage" title="Kembali ke Kelola" aria-label="Kembali ke Kelola">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+  </button>`;
+}
+function bindBackToManage() {
+  const btn = $('#back-manage');
+  if (btn) btn.onclick = () => { state.manageRoute = null; renderMain(); };
+}
+
+function renderManage() {
+  const main = $('#main');
+  if (state.manageRoute) {
+    return routeManage(state.manageRoute);
   }
 
-  const items = [];
-  if (hasPerm('profile')) items.push({ label: 'Profil', route: 'cashier-profile' });
-  if (hasPerm('printer')) items.push({ label: 'Printer', route: 'cashier-printer' });
-  if (hasPerm('sync')) items.push({ label: 'Sinkronisasi', route: 'cashier-sync', count: state.syncQueue.length || null });
-  if (hasPerm('expense')) items.push({ label: 'Pengeluaran', route: 'cashier-expenses' });
-  if (hasPerm('theme')) items.push({ label: 'Tema', route: 'cashier-theme', badge: { text: state.theme === 'dark' ? 'Gelap' : 'Terang', cls: 'muted' } });
-  items.push({ label: 'Tentang', route: 'about' });
+  const lowCount = state.products.filter(p => p.track && p.stock > 0 && p.stock <= p.low).length;
+  const outCount = state.products.filter(p => p.track && p.stock === 0).length;
+  const stockBadge = (lowCount + outCount) > 0 ? { text: `${lowCount + outCount} low`, cls: 'warn' } : null;
 
-  body.innerHTML = items.map(it => `
-    <button class="sidebar-item" data-route="${it.route}">
-      <span class="si-label">${it.label}</span>
-      ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
-      ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
-    </button>
-  `).join('');
-  body.querySelectorAll('[data-route]').forEach(el => {
-    el.onclick = () => { closeSidebar(); routeManage(el.dataset.route); };
+  const groups = [
+    { title: 'Katalog', items: [
+      { label: 'Produk', sub: 'Kelola daftar produk', route: 'products', count: state.products.length },
+      { label: 'Kategori', sub: 'Kelompok produk', route: 'categories', count: state.categories.length },
+      { label: 'Stok', sub: 'Pantau & sesuaikan stok', route: 'inventory', badge: stockBadge },
+    ]},
+    { title: 'Bisnis', items: [
+      { label: 'Outlet', sub: 'Cabang & lokasi toko', route: 'outlets', count: state.outlets.length },
+      { label: 'Kasir', sub: 'Akun & hak akses', route: 'workers', count: state.workers.length },
+    ]},
+    { title: 'Pengaturan', items: [
+      { label: 'QRIS', sub: 'Metode pembayaran QR', route: 'qris', badge: state.settings.qris.active ? { text: 'Aktif', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+      { label: 'Printer', sub: 'Printer Bluetooth struk', route: 'printer', badge: state.settings.printer.connected ? { text: 'On', cls: 'cash' } : { text: 'Off', cls: 'muted' } },
+      { label: 'Struk', sub: 'Format & konten struk', route: 'receipt' },
+      { label: 'Notifikasi', sub: 'Preferensi notifikasi', route: 'notif-settings' },
+      { label: 'Sinkronisasi', sub: 'Status & queue', route: 'sync-settings', count: state.syncQueue.length || null },
+      { label: 'Keamanan', sub: 'Aturan void & refund', route: 'security-settings' },
+      { label: 'Audit Log', sub: 'Riwayat aktivitas', route: 'audit-log', count: state.auditLog.length || null },
+      { label: 'Tema', sub: state.theme === 'dark' ? 'Mode gelap' : 'Mode terang', route: 'theme-settings' },
+      { label: 'Profil', sub: 'Info akun kamu', route: 'profile' },
+      { label: 'Tentang', sub: 'Info aplikasi', route: 'about' },
+    ]},
+  ];
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div><h2>Kelola</h2><div class="sub">Menu owner</div></div>
+      <button class="manage-logout-btn" id="manage-logout">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        Keluar
+      </button>
+    </div>
+
+    ${groups.map(g => `
+      <div class="section-title">${g.title}</div>
+      <div class="manage-grid">
+        ${g.items.map(it => `
+          <button class="manage-card" data-route="${it.route}">
+            <div class="manage-card-main">
+              <div class="row-title">${it.label}</div>
+              <div class="row-sub">${it.sub}</div>
+            </div>
+            <div class="manage-card-meta">
+              ${it.badge ? `<span class="si-badge ${it.badge.cls}">${it.badge.text}</span>` : ''}
+              ${it.count != null && it.count !== 0 ? `<span class="si-count">${it.count}</span>` : ''}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </button>
+        `).join('')}
+      </div>
+    `).join('')}
+  `;
+
+  $('#manage-logout').onclick = handleLogout;
+  $$('[data-route]').forEach(el => {
+    el.onclick = () => {
+      state.manageRoute = el.dataset.route;
+      pushNav();
+      renderMain();
+    };
   });
 }
 
-let _sidebarScrollY = 0;
-function openSidebar() {
-  if (!state.user) return;
-  const isOwner = state.user.role === 'owner';
-  const titleEl = document.querySelector('#sidebar .sidebar-header > div:nth-child(2) > div:first-child');
-  const subEl = document.querySelector('#sidebar .sidebar-header > div:nth-child(2) > div:last-child');
-  if (titleEl) titleEl.textContent = isOwner ? 'Kelola' : 'Akun Saya';
-  if (subEl) subEl.textContent = isOwner ? 'Menu owner' : 'Pengaturan kasir';
-  renderSidebar();
-  _sidebarScrollY = window.scrollY || window.pageYOffset || 0;
-  document.body.style.position = 'fixed';
-  document.body.style.top = `-${_sidebarScrollY}px`;
-  document.body.style.left = '0';
-  document.body.style.right = '0';
-  document.body.classList.add('sidebar-open');
-  $('#sidebar').hidden = false;
-  $('#sidebar-backdrop').hidden = false;
-}
-function closeSidebar() {
-  const wasOpen = !$('#sidebar').hidden;
-  $('#sidebar').hidden = true;
-  $('#sidebar-backdrop').hidden = true;
-  document.body.style.position = '';
-  document.body.style.top = '';
-  document.body.style.left = '';
-  document.body.style.right = '';
-  document.body.classList.remove('sidebar-open');
-  if (wasOpen) window.scrollTo(0, _sidebarScrollY);
-}
-$('#brand-mark').addEventListener('click', openSidebar);
-$('#brand-mark').addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSidebar(); }
-});
-$('#sidebar-close').addEventListener('click', closeSidebar);
-$('#sidebar-backdrop').addEventListener('click', closeSidebar);
-$('#sidebar-logout').addEventListener('click', () => { closeSidebar(); handleLogout(); });
-
-// ROUTER SIDEBAR
+// ROUTER SUB-MANAGE
 function routeManage(route) {
   if (route === 'products') return pageProducts();
   if (route === 'categories') return pageCategories();
@@ -1877,40 +2180,26 @@ function routeManage(route) {
   if (route === 'cashier-expenses') return pageExpenses();
 }
 
-function backHome() {
-  if (state.user.role === 'cashier') {
-    if (hasPerm('pos')) state.activeView = 'pos';
-    else if (hasPerm('dashboard')) state.activeView = 'dashboard';
-    else if (hasPerm('transactions')) state.activeView = 'transactions';
-    else if (hasPerm('shift')) state.activeView = 'shift';
-  } else {
-    state.ownerTab = 'pos';
-  }
-  renderNav();
-  renderMain();
-}
-
 // PRODUCTS
 function pageProducts() {
   const main = $('#main');
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Produk</h2><div class="sub">${state.products.length} produk</div></div>
-      <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      ${backToManageBtn()}
     </div>
     <div class="pos-search" style="margin-bottom:12px">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" placeholder="Cari produk…" id="prod-search" />
     </div>
     <div class="tx-list" id="prod-list"></div>
-    <button class="fab" id="add-prod">+</button>
+    <button class="fab no-nav" id="add-prod">+</button>
   `;
   renderProdList();
   $('#prod-search').oninput = renderProdList;
   $('#add-prod').onclick = () => productForm(null);
-  $('#back-home').onclick = backHome;
+  bindBackToManage();
 }
-
 function renderProdList() {
   const q = ($('#prod-search')?.value || '').toLowerCase();
   const list = state.products.filter(p => p.name.toLowerCase().includes(q));
@@ -1949,7 +2238,6 @@ function renderProdList() {
     });
   });
 }
-
 function productForm(id) {
   const p = id ? state.products.find(x => x.id === id) : null;
   const isEdit = !!p;
@@ -1977,7 +2265,7 @@ function productForm(id) {
         </div>
       </div>
       <div class="switch-row">
-        <div><div style="font-weight:500">Aktif</div><div class="muted small">Nonaktif tidak muncul di POS</div></div>
+        <div><div style="font-weight:500">Aktif</div><div class="muted small">Nonaktif tidak muncul di Kasir</div></div>
         <button class="switch ${data.active ? 'on' : ''}" id="p-active"></button>
       </div>
       <div class="form-actions">
@@ -2017,7 +2305,7 @@ function pageCategories() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Kategori</h2><div class="sub">${state.categories.length} kategori</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="tx-list">
         ${state.categories.map(c => {
@@ -2036,9 +2324,9 @@ function pageCategories() {
             </div>`;
         }).join('')}
       </div>
-      <button class="fab" id="add-cat">+</button>
+      <button class="fab no-nav" id="add-cat">+</button>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#add-cat').onclick = () => {
       promptModal('Kategori baru', 'Nama kategori', '', v => {
         if (!v.trim()) return;
@@ -2080,7 +2368,7 @@ function pageInventory() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Stok</h2><div class="sub">${tracked.length} produk dilacak</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="kpi-compact">
         <div><div class="label">Low stock</div><div class="amount" style="color:var(--warn)">${low.length}</div></div>
@@ -2109,7 +2397,7 @@ function pageInventory() {
         }).join('') || '<div class="empty"><div class="empty-title">Belum ada produk tracked</div></div>'}
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $$('[data-adjust]').forEach(b => b.onclick = () => {
       const p = state.products.find(x => x.id === parseInt(b.dataset.adjust));
       openSheet(`
@@ -2150,7 +2438,7 @@ function pageOutlets() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Outlet</h2><div class="sub">${state.outlets.length} outlet</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="tx-list">
         ${state.outlets.map(o => `
@@ -2169,9 +2457,9 @@ function pageOutlets() {
             </div>
           </div>`).join('')}
       </div>
-      <button class="fab" id="add-outlet">+</button>
+      <button class="fab no-nav" id="add-outlet">+</button>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#add-outlet').onclick = () => outletForm(null);
     $$('[data-edit]').forEach(b => b.onclick = () => outletForm(parseInt(b.dataset.edit)));
     $$('[data-del]').forEach(b => b.onclick = () => {
@@ -2185,7 +2473,6 @@ function pageOutlets() {
   };
   render();
 }
-
 function outletForm(id) {
   const o = id ? state.outlets.find(x => x.id === id) : null;
   const isEdit = !!o;
@@ -2228,7 +2515,7 @@ function pageWorkers() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Kasir</h2><div class="sub">${state.workers.length} pekerja</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="tx-list">
         ${state.workers.map(w => {
@@ -2250,9 +2537,9 @@ function pageWorkers() {
             </div>`;
         }).join('')}
       </div>
-      <button class="fab" id="add-worker">+</button>
+      <button class="fab no-nav" id="add-worker">+</button>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#add-worker').onclick = () => workerForm(null);
     $$('[data-edit]').forEach(b => b.onclick = () => workerForm(parseInt(b.dataset.edit)));
     $$('[data-toggle]').forEach(b => b.onclick = () => {
@@ -2264,7 +2551,6 @@ function pageWorkers() {
   };
   render();
 }
-
 function workerForm(id) {
   const w = id ? state.workers.find(x => x.id === id) : null;
   const isEdit = !!w;
@@ -2312,10 +2598,8 @@ function workerForm(id) {
       </div>
     </div>
   `);
-
   let active = data.active;
   let perms = [...currentPerms];
-
   $('#w-active').onclick = e => { active = !active; e.target.classList.toggle('on', active); };
   $$('#w-perms [data-perm]').forEach(btn => {
     btn.onclick = e => {
@@ -2325,25 +2609,20 @@ function workerForm(id) {
       e.target.classList.toggle('on', perms.includes(pid));
     };
   });
-
   $('#w-cancel').onclick = closeSheet;
   $('#w-save').onclick = () => {
     const displayName = $('#w-name').value.trim();
     const username = $('#w-user').value.trim();
     const password = $('#w-pass').value;
     const password2 = $('#w-pass2') ? $('#w-pass2').value : password;
-
     if (!displayName || !username) return toast('Nama dan username wajib', 'error');
-
     if (!isEdit) {
       if (!password || password.length < 6) return toast('Password minimal 6 karakter', 'error');
       if (password !== password2) return toast('Konfirmasi password tidak cocok', 'error');
     } else {
       if (password && password.length < 6) return toast('Password minimal 6 karakter', 'error');
     }
-
     if (!perms.length) return toast('Minimal 1 fitur harus diaktifkan', 'error');
-
     const obj = {
       displayName, username,
       outlet: $('#w-outlet').value,
@@ -2352,10 +2631,8 @@ function workerForm(id) {
       permissions: perms,
     };
     if (password) obj.password = password;
-
     if (isEdit) Object.assign(w, obj);
     else state.workers.push({ id: Date.now(), ...obj });
-
     closeSheet();
     pageWorkers();
     toast(isEdit ? 'Kasir diperbarui' : 'Kasir ditambahkan', 'success');
@@ -2369,7 +2646,7 @@ function pageQRIS() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>QRIS</h2><div class="sub">Pengaturan pembayaran QR</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="form-section">
         <div style="text-align:center;padding:24px;border:1px dashed var(--border-strong);border-radius:var(--radius)">
@@ -2378,7 +2655,7 @@ function pageQRIS() {
             : `<div style="color:var(--text-faint);font-size:13px">Belum ada gambar QRIS</div>`}
         </div>
         <div class="switch-row">
-          <div><div style="font-weight:500">Aktifkan QRIS</div><div class="muted small">Muncul sebagai metode bayar di POS</div></div>
+          <div><div style="font-weight:500">Aktifkan QRIS</div><div class="muted small">Muncul sebagai metode bayar di Kasir</div></div>
           <button class="switch ${state.settings.qris.active ? 'on' : ''}" id="q-active"></button>
         </div>
         <div class="form-actions">
@@ -2396,14 +2673,14 @@ function pageQRIS() {
         <button class="btn btn-primary" id="q-save-retention">Simpan retensi</button>
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#q-active').onclick = e => {
       state.settings.qris.active = !state.settings.qris.active;
       e.target.classList.toggle('on', state.settings.qris.active);
     };
     $('#q-upload').onclick = () => { state.settings.qris.image = 'qris.png'; render(); toast('QRIS diunggah', 'success'); };
     if ($('#q-del')) {
-      $('#q-del').onclick = () => confirmModal('Hapus QRIS?', 'QRIS tidak akan tampil di POS.', 'Hapus', () => {
+      $('#q-del').onclick = () => confirmModal('Hapus QRIS?', 'QRIS tidak akan tampil di Kasir.', 'Hapus', () => {
         state.settings.qris.image = null;
         render();
       });
@@ -2426,7 +2703,7 @@ function pagePrinterSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Printer</h2><div class="sub">Bluetooth thermal</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="form-section">
         <div class="switch-row" style="padding:0">
@@ -2444,7 +2721,7 @@ function pagePrinterSettings() {
         </div>
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     if ($('#pr-scan')) $('#pr-scan').onclick = () => {
       toast('Mencari printer…');
       setTimeout(() => {
@@ -2486,7 +2763,7 @@ ${r.footer}`.trim();
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Struk</h2><div class="sub">Format & konten</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="form-section">
         <label class="field"><span>Nama bisnis (header)</span><input type="text" id="r-biz" value="${r.bizName}" /></label>
@@ -2503,7 +2780,7 @@ ${r.footer}`.trim();
         <button class="btn btn-primary btn-block" id="r-save">Simpan</button>
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $$('[data-sw]').forEach(b => b.onclick = e => {
       r[b.dataset.sw] = !r[b.dataset.sw];
       e.target.classList.toggle('on', r[b.dataset.sw]);
@@ -2527,7 +2804,7 @@ function pageNotifSettings() {
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Notifikasi</h2><div class="sub">Preferensi</div></div>
-      <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      ${backToManageBtn()}
     </div>
     <div class="form-section">
       <div class="switch-row"><div style="font-weight:500">Stok menipis</div><button class="switch ${n.lowStock?'on':''}" data-n="lowStock"></button></div>
@@ -2535,7 +2812,7 @@ function pageNotifSettings() {
       <div class="switch-row"><div style="font-weight:500">Sistem</div><button class="switch ${n.system?'on':''}" data-n="system"></button></div>
     </div>
   `;
-  $('#back-home').onclick = backHome;
+  bindBackToManage();
   $$('[data-n]').forEach(b => b.onclick = e => {
     n[b.dataset.n] = !n[b.dataset.n];
     e.target.classList.toggle('on', n[b.dataset.n]);
@@ -2549,7 +2826,7 @@ function pageSyncSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Sinkronisasi</h2><div class="sub">Status & queue</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="form-section">
         <div class="shift-row"><span class="lbl">Status</span><span class="val">${state.online ? 'Online' : 'Offline'}</span></div>
@@ -2561,7 +2838,7 @@ function pageSyncSettings() {
         </button>
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#sync-now-btn').onclick = () => {
       state.syncQueue = [];
       updateSyncIndicator();
@@ -2580,7 +2857,7 @@ function pageSecuritySettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Keamanan</h2><div class="sub">Aturan void & refund</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="security-info">
         Aturan ini membatasi kasir untuk void/refund supaya tidak bisa menghilangkan uang dari kas.
@@ -2603,7 +2880,7 @@ function pageSecuritySettings() {
         </div>
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     bindRupiahInput('#sec-void-limit', () => {});
     bindRupiahInput('#sec-refund-limit', () => {});
     $('#sec-save').onclick = () => {
@@ -2627,7 +2904,7 @@ function pageAuditLog() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Audit Log</h2><div class="sub">${state.auditLog.length} catatan</div></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="tx-list">
         ${state.auditLog.length ? state.auditLog.map(a => `
@@ -2649,7 +2926,7 @@ function pageAuditLog() {
         `).join('') : '<div class="empty"><div class="empty-title">Belum ada catatan</div><div class="empty-sub">Void/refund yang dilakukan akan tercatat di sini.</div></div>'}
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
   };
   render();
 }
@@ -2661,7 +2938,7 @@ function pageThemeSettings() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Tema</h2></div>
-        <button class="btn btn-ghost" id="back-home">← Beranda</button>
+        ${backToManageBtn()}
       </div>
       <div class="form-section">
         ${['light', 'dark'].map(t => `
@@ -2674,7 +2951,7 @@ function pageThemeSettings() {
           </button>`).join('')}
       </div>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $$('[data-theme]').forEach(b => b.onclick = () => { applyTheme(b.dataset.theme); render(); });
   };
   render();
@@ -2683,10 +2960,11 @@ function pageThemeSettings() {
 // PROFILE
 function pageProfile() {
   const main = $('#main');
+  const isManage = state.manageRoute;
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Profil</h2></div>
-      <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      ${isManage ? backToManageBtn() : ''}
     </div>
     <div class="form-section">
       <div class="field"><span>Nama</span><input type="text" value="${state.user.displayName}" disabled /></div>
@@ -2698,7 +2976,7 @@ function pageProfile() {
       <button class="btn btn-ghost btn-block" id="p-logout">Keluar</button>
     </div>
   `;
-  $('#back-home').onclick = backHome;
+  if (isManage) bindBackToManage();
   $('#p-logout').onclick = handleLogout;
 }
 
@@ -2708,19 +2986,25 @@ function pageAbout() {
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Tentang</h2></div>
-      <button class="btn btn-ghost" id="back-home">← Beranda</button>
+      ${backToManageBtn()}
     </div>
     <div class="form-section">
-      <div class="brand-mark" style="cursor:default">SK</div>
+      <div class="brand-mark" style="cursor:default" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 3.5l1 1 1-1 1 1 1-1 1 1 1-1 1 1 1-1v6H8v-6z" fill="#fff"/>
+          <rect x="3.5" y="10" width="17" height="10.5" rx="2.5" fill="#fff"/>
+          <circle cx="17" cy="15" r="1.6" fill="var(--primary)"/>
+        </svg>
+      </div>
       <div style="font-weight:600;font-size:16px">SakuKasir</div>
       <div class="muted small">Versi prototipe · 2026</div>
-      <p class="muted small" style="margin:12px 0 0">Point of Sale untuk usaha kecil dan menengah.</p>
+      <p class="muted small" style="margin:12px 0 0">Aplikasi kasir untuk usaha kecil dan menengah.</p>
     </div>
   `;
-  $('#back-home').onclick = backHome;
+  bindBackToManage();
 }
 
-// EXPENSES
+// EXPENSES (kasir)
 function pageExpenses() {
   const main = $('#main');
   const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
@@ -2729,7 +3013,7 @@ function pageExpenses() {
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Pengeluaran</h2><div class="sub">${state.expenses.length} catatan</div></div>
-        <button class="btn btn-ghost" id="back-home">← Kembali</button>
+        ${backToManageBtn()}
       </div>
       <div class="kpi-hero">
         <div class="label">Total pengeluaran</div>
@@ -2762,9 +3046,9 @@ function pageExpenses() {
           </div>`).join('')
         : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div><div class="empty-sub">Tap + untuk catat pengeluaran.</div></div>'}
       </div>
-      <button class="fab" id="add-exp">+</button>
+      <button class="fab no-nav" id="add-exp">+</button>
     `;
-    $('#back-home').onclick = backHome;
+    bindBackToManage();
     $('#add-exp').onclick = () => expForm(null, CATS, render);
     $$('[data-edit]').forEach(b => b.onclick = () => expForm(b.dataset.edit, CATS, render));
     $$('[data-del]').forEach(b => b.onclick = () => {
@@ -2779,7 +3063,6 @@ function pageExpenses() {
   };
   render();
 }
-
 function expForm(id, CATS, onDone) {
   const e = id ? state.expenses.find(x => x.id === id) : null;
   const isEdit = !!e;
@@ -2838,7 +3121,6 @@ function updateSyncIndicator() {
     banner.hidden = true;
   }
 }
-
 $('#sync-indicator').onclick = () => {
   openSheet(`
     <h3 style="font-size:17px;margin-bottom:4px">Sinkronisasi</h3>
@@ -2865,17 +3147,19 @@ $('#sync-indicator').onclick = () => {
     toast(state.online ? 'Kembali online' : 'Mode offline aktif');
   };
 };
-
 $('#sync-now-inline').onclick = () => {
   if (!state.online) return toast('Tidak bisa sync saat offline', 'error');
   state.syncQueue = [];
   updateSyncIndicator();
   toast('Sinkronisasi selesai', 'success');
 };
-
 $('#printer-indicator').onclick = () => {
   if (state.user.role === 'owner') {
-    pagePrinterSettings();
+    state.manageRoute = 'printer';
+    state.ownerTab = 'manage';
+    pushNav();
+    renderNav();
+    renderMain();
   } else {
     if (!hasPerm('printer')) return toast('Tidak ada akses printer', 'error');
     openSheet(`
@@ -2907,7 +3191,6 @@ $('#printer-indicator').onclick = () => {
     if (tp) tp.onclick = () => toast('Test print terkirim');
   }
 };
-
 $('#notif-btn').onclick = () => {
   const list = state.notifications;
   openSheet(`
@@ -2929,13 +3212,24 @@ $('#notif-btn').onclick = () => {
   `);
   $('#notif-dot').style.display = 'none';
 };
-
-$('#theme-btn').onclick = () => {
-  const next = state.theme === 'light' ? 'dark' : 'light';
-  applyTheme(next);
-  toast(`Tema: ${next === 'dark' ? 'Gelap' : 'Terang'}`);
+$('#manage-btn').onclick = () => {
+  if (!state.user || state.user.role !== 'owner') return;
+  if (state.ownerTab === 'manage') {
+    try { history.back(); }
+    catch (e) {
+      state.ownerTab = 'pos';
+      state.manageRoute = null;
+      renderNav();
+      renderMain();
+    }
+    return;
+  }
+  state.ownerTab = 'manage';
+  state.manageRoute = null;
+  pushNav();
+  renderNav();
+  renderMain();
 };
-
 $('#sheet-backdrop').onclick = closeSheet;
 
 // PRINT RECEIPT
@@ -2983,6 +3277,7 @@ function printReceipt(tx) {
   $('#rc-close').onclick = close;
   $('#rc-bd').onclick = e => { if (e.target.id === 'rc-bd') close(); };
   $('#rc-print').onclick = () => { close(); toast('Struk terkirim ke printer', 'success'); };
+  pushNav();
 }
 
 // INIT
