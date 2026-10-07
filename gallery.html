@@ -7,15 +7,28 @@
   <style>
     body { margin: 0; padding: 0; background: #eee; font-family: sans-serif; }
     h1 { font-size: 16px; padding: 12px; margin: 0; background: #0F5132; color: #fff; }
-    .item { margin: 10px; background: #fff; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
-    .label { padding: 6px 10px; background: #0F5132; color: #fff; font-size: 12px; font-weight: 600; }
-    iframe { width: 390px; border: 0; display: block; margin: 0 auto; }
+    .item { margin: 12px 8px; background: #fff; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+    .label { padding: 8px 12px; background: #0F5132; color: #fff; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+    .frame-wrap { width: 100%; overflow: hidden; position: relative; background: #FAFAF7; }
+    iframe { border: 0; display: block; transform-origin: top left; }
   </style>
 </head>
 <body>
-  <h1>SakuKasir Gallery · Full Content</h1>
+  <h1 id="title">SakuKasir Gallery</h1>
   <div id="grid"></div>
   <script>
+    // ---- 1. Deteksi mode dari URL ----
+    // gallery.html                → mobile (390px)
+    // gallery.html?device=tablet  → tablet (1024px)
+    var params = new URLSearchParams(location.search);
+    var isTablet = params.get('device') === 'tablet';
+    var VIEWPORT_W = isTablet ? 1024 : 390;
+    var VIEWPORT_H = isTablet ? 768 : 844;
+
+    document.getElementById('title').textContent =
+      'SakuKasir Gallery · ' + (isTablet ? 'Tablet' : 'Mobile');
+
+    // ---- 2. Daftar screen ----
     var SCREENS = [
       'login','register','forgot','setup',
       'owner-pos','owner-pos-cart','owner-checkout',
@@ -28,37 +41,107 @@
       'modal-void','modal-refund','sheet-checkout','modal-confirm','success'
     ];
 
+    // ---- 3. CSS flatten (disable fixed & min-height) ----
+    var FLAT_CSS = [
+      /* Hilangkan fixed positioning — mobile */
+      '.app-header { position: static !important; }',
+      '.bottom-nav { position: static !important; }',
+      '.cart-bar { position: static !important; }',
+      '.sticky-pay-bar { position: static !important; }',
+      '.fab { display: none !important; }',
+      '.offline-banner { position: static !important; }',
+      '.sheet-backdrop { position: static !important; background: transparent !important; }',
+      '.sheet { position: static !important; max-height: none !important; transform: none !important; border-radius: 0 !important; }',
+      '.modal-backdrop { position: static !important; background: rgba(0,0,0,.05) !important; padding: 12px !important; }',
+      '.image-viewer-bd { position: static !important; }',
+
+      /* Hilangkan fixed positioning — tablet */
+      '.tablet-sidebar { position: static !important; top: auto !important; left: auto !important; bottom: auto !important; height: auto !important; width: 100% !important; border-right: 0 !important; border-bottom: 1px solid #E5E3DA !important; }',
+
+      /* Hilangkan min-height */
+      '.auth-wrap { min-height: auto !important; }',
+      '.app-main { min-height: auto !important; padding-bottom: 24px !important; margin-left: 0 !important; padding-left: 16px !important; padding-right: 16px !important; }',
+      '.success-screen { min-height: auto !important; padding: 40px 24px !important; }',
+
+      /* Reset overflow */
+      'html, body { overflow: visible !important; height: auto !important; min-height: 0 !important; }',
+      '.view { min-height: 0 !important; }',
+      '.app-main { padding-top: 16px !important; }'
+    ].join('\n');
+
+    // ---- 4. Render semua iframe ----
     var grid = document.getElementById('grid');
 
     SCREENS.forEach(function(name) {
-      var div = document.createElement('div');
-      div.className = 'item';
-      div.innerHTML = '<div class="label">' + name + '</div>' +
-        '<iframe src="index.html?screen=' + name + '" scrolling="no"></iframe>';
-      grid.appendChild(div);
+      var item = document.createElement('div');
+      item.className = 'item';
+      item.innerHTML =
+        '<div class="label">' + name + '</div>' +
+        '<div class="frame-wrap" style="height: ' + VIEWPORT_H + 'px;">' +
+          '<iframe src="index.html?screen=' + name + '" scrolling="no" ' +
+                  'style="width: ' + VIEWPORT_W + 'px; height: ' + VIEWPORT_H + 'px;"></iframe>' +
+        '</div>';
+      grid.appendChild(item);
     });
 
-    // Setelah iframe load, ukur tinggi konten & set tinggi iframe
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        document.querySelectorAll('iframe').forEach(function(f) {
-          try {
-            // Tambah delay kecil biar app.js selesai render
-            setTimeout(function() {
-              var doc = f.contentDocument || f.contentWindow.document;
-              var h = Math.max(
-                doc.body.scrollHeight,
-                doc.documentElement.scrollHeight,
-                doc.body.offsetHeight,
-                doc.documentElement.offsetHeight
-              );
-              f.style.height = h + 'px';
-            }, 500);
-          } catch (e) {
-            console.warn('Cannot measure iframe:', e);
+    // ---- 5. Auto-measure & scale ----
+    function updateHeights() {
+      // Hitung lebar container yang tersedia untuk iframe
+      var sampleItem = document.querySelector('.item');
+      var containerW = sampleItem ? sampleItem.offsetWidth - 2 : (window.innerWidth - 20);
+      var scale = containerW / VIEWPORT_W;
+
+      document.querySelectorAll('iframe').forEach(function(f) {
+        try {
+          var doc = f.contentDocument || f.contentWindow.document;
+          if (!doc || !doc.body) return;
+
+          // Inject CSS override sekali
+          if (!doc.body.dataset.flatApplied) {
+            var style = doc.createElement('style');
+            style.textContent = FLAT_CSS;
+            doc.head.appendChild(style);
+            doc.body.dataset.flatApplied = '1';
           }
-        });
-      }, 1500); // tunggu semua app.js di iframe selesai init
+
+          // Ukur tinggi konten sebenarnya
+          var h = Math.max(
+            doc.body.scrollHeight,
+            doc.documentElement.scrollHeight,
+            doc.body.offsetHeight,
+            doc.documentElement.offsetHeight
+          );
+          if (h < 500) h = 500;
+
+          // Set ukuran iframe asli
+          f.style.width = VIEWPORT_W + 'px';
+          f.style.height = h + 'px';
+
+          // Scale supaya pas dengan container (lebar layar HP)
+          f.style.transform = 'scale(' + scale + ')';
+
+          // Sesuaikan tinggi wrapper biar tidak ada space kosong
+          var wrap = f.parentElement;
+          wrap.style.height = (h * scale) + 'px';
+
+        } catch (e) { /* diam-diam skip */ }
+      });
+    }
+
+    // Jalankan pertama setelah 1 detik
+    setTimeout(updateHeights, 1000);
+
+    // Lalu poll setiap 500ms × 20 (total 10 detik)
+    var polls = 0;
+    var interval = setInterval(function() {
+      updateHeights();
+      polls++;
+      if (polls >= 20) clearInterval(interval);
+    }, 500);
+
+    // Re-measure saat window resize / rotate
+    window.addEventListener('resize', function() {
+      setTimeout(updateHeights, 300);
     });
   </script>
 </body>
