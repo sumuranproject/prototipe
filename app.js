@@ -31,7 +31,7 @@ const state = {
   ],
   auditLog: [],
   activeView: 'pos',
-  ownerTab: 'dashboard',
+  ownerTab: 'pos',
   transactions: [
     { id: 'TRX-20261006-0042', time: '14:32', date: '2026-10-06', createdAt: Date.now() - 3600000, items: [{ name: 'Kopi Susu', qty: 2, price: 18000 }], total: 38000, method: 'cash', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, received: 50000, change: 12000, status: 'completed' },
     { id: 'TRX-20261006-0041', time: '14:05', date: '2026-10-06', createdAt: Date.now() - 5000000, items: [{ name: 'Teh Manis', qty: 1, price: 8000 }], total: 18000, method: 'qris', sync: 'synced', cashier: 'Andi', cashierId: 'kasir', outlet: 'Toko Berkah', discount: 0, tax: 0, status: 'completed' },
@@ -140,7 +140,6 @@ function txAgeMinutes(tx) {
   return Math.floor((Date.now() - tx.createdAt) / 60000);
 }
 
-// Format angka jadi "100.000" saat mengetik
 function formatRupiahInput(value) {
   const digits = String(value).replace(/\D/g, '');
   if (!digits) return '';
@@ -310,7 +309,6 @@ function imageViewer(src) {
   host.onclick = (e) => { if (e.target === host || e.target.closest('.close-x')) close(); };
 }
 
-// QRIS PROOF — simulasi capture (di Android nanti pakai TakePicture)
 function captureQrisProof(callback) {
   const input = document.createElement('input');
   input.type = 'file';
@@ -415,7 +413,6 @@ $('#login-form').addEventListener('submit', (e) => {
         errEl.hidden = false;
         return;
       }
-      // Cek password kalau ada
       if (w.password && w.password !== pass) {
         errEl.textContent = 'Username atau password salah.';
         errEl.hidden = false;
@@ -447,7 +444,7 @@ function enterApp() {
     else if (hasPerm('shift')) state.activeView = 'shift';
     else state.activeView = 'pos';
   } else {
-    state.ownerTab = 'dashboard';
+    state.ownerTab = 'pos';
   }
   renderNav();
   renderMain();
@@ -485,9 +482,12 @@ function renderNav() {
     nav.innerHTML = items.length ? items.join('') : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
   } else {
     nav.innerHTML = `
-      ${navItem('dashboard', 'Dashboard', '<path d="M3 3h7v9H3z"/><path d="M14 3h7v5h-7z"/><path d="M14 12h7v9h-7z"/><path d="M3 16h7v5H3z"/>')}
-      ${navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
-      ${navItem('reports', 'Laporan', '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>')}
+      ${navItem('pos', 'POS',
+        '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>')}
+      ${navItem('checkout', 'Checkout',
+        '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>')}
+      ${navItem('reports', 'Laporan',
+        '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>')}
     `;
   }
   $$('.nav-item').forEach(el => {
@@ -514,11 +514,12 @@ function navItem(view, label, svgInner) {
 function renderMain() {
   const main = $('#main');
   const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
-  if (v === 'pos') return renderPOS(main);
-  if (v === 'dashboard') return renderDashboard(main);
+  if (v === 'pos')        return renderPOS(main);
+  if (v === 'checkout')   return renderCheckout(main);
+  if (v === 'dashboard')  return renderDashboard(main);
   if (v === 'transactions') return renderTransactions(main);
-  if (v === 'shift') return renderShift(main);
-  if (v === 'reports') return renderReports(main);
+  if (v === 'shift')      return renderShift(main);
+  if (v === 'reports')    return renderReports(main);
 }
 
 // OUTLET CHIP
@@ -712,7 +713,7 @@ function openCartSheet() {
   $('#go-checkout').onclick = () => { closeSheet(); openCheckout(); };
 }
 
-// CHECKOUT
+// CHECKOUT SHEET
 function openCheckout() {
   let method = 'cash', discount = 0, taxPct = 0, cashReceived = 0;
   let qrisProof = null;
@@ -918,6 +919,92 @@ function showSuccess(tx) {
   };
   $('#new-tx').onclick = () => { state.cart = []; nav.style.display = ''; renderMain(); };
   $('#view-detail').onclick = () => { nav.style.display = ''; showTxDetail(tx.id); };
+}
+
+// CHECKOUT VIEW
+function renderCheckout(main) {
+  const cartCount = state.cart.reduce((s, i) => s + i.qty, 0);
+  const { subtotal } = calculateTotals(state.cart);
+  const today = todayStr();
+  const todayTx = state.transactions.filter(t => t.date === today);
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div>
+        <h2>Checkout</h2>
+        <div class="sub">${cartCount ? cartCount + ' item siap dibayar' : 'Belum ada item di cart'}</div>
+      </div>
+      ${cartCount ? '<button class="btn btn-ghost" id="clear-cart-page">Kosongkan</button>' : ''}
+    </div>
+
+    ${cartCount ? `
+      <div class="checkout-panel">
+        <div class="checkout-items">
+          ${state.cart.map(item => `
+            <div class="checkout-item">
+              <div class="ci-main">
+                <div class="ci-name">${item.name}</div>
+                <div class="ci-price">${rupiah(item.price)} × ${item.qty}</div>
+              </div>
+              <div class="qty-ctrl">
+                <button data-act="minus" data-id="${item.id}">−</button>
+                <span class="qty-val">${item.qty}</span>
+                <button data-act="plus" data-id="${item.id}">+</button>
+              </div>
+              <div class="ci-total">${rupiah(item.price * item.qty)}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="summary-row total"><span>Total</span><span>${rupiah(subtotal)}</span></div>
+        <button class="btn btn-primary btn-block" id="pay-now" style="margin-top:12px">
+          Bayar sekarang · ${rupiah(subtotal)}
+        </button>
+      </div>
+    ` : `
+      <div class="empty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+          <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+        <div class="empty-title">Cart masih kosong</div>
+        <div class="empty-sub">Buka tab POS untuk memilih produk, lalu kembali ke sini untuk membayar.</div>
+        <button class="btn btn-primary" id="go-pos">Buka POS</button>
+      </div>
+    `}
+
+    <div class="section-title">Transaksi hari ini</div>
+    <div class="tx-list">
+      ${todayTx.length ? todayTx.map(renderTxItem).join('')
+        : '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}
+    </div>
+  `;
+
+  if ($('#go-pos')) $('#go-pos').onclick = () => {
+    state.ownerTab = 'pos'; renderNav(); renderMain();
+  };
+  if ($('#clear-cart-page')) $('#clear-cart-page').onclick = () => {
+    confirmModal('Kosongkan cart?', 'Semua item akan dihapus.', 'Kosongkan', () => {
+      state.cart = []; renderCheckout(main);
+    });
+  };
+  if ($('#pay-now')) $('#pay-now').onclick = () => openCheckout();
+  $$('[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      const id = parseInt(btn.dataset.id);
+      const item = state.cart.find(x => x.id === id);
+      if (!item) return;
+      if (btn.dataset.act === 'plus') {
+        const p = state.products.find(x => x.id === id);
+        if (p.track && item.qty >= p.stock) return toast('Stok tidak cukup', 'error');
+        item.qty++;
+      } else {
+        item.qty--;
+        if (item.qty <= 0) state.cart = state.cart.filter(x => x.id !== id);
+      }
+      renderCheckout(main);
+    };
+  });
+  $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
 // TRANSACTIONS
@@ -1493,6 +1580,198 @@ function renderDashboard(main) {
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
+// REPORTS
+function renderReports(main) {
+  let tab = 'transactions';
+  const TABS = [
+    { id: 'transactions', label: 'Transaksi',
+      icon: '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>' },
+    { id: 'expenses', label: 'Pengeluaran',
+      icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14" r="1"/>' },
+    { id: 'reports', label: 'Laporan',
+      icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
+  ];
+
+  const render = () => {
+    const today = todayStr();
+    const todayTx = state.transactions.filter(t => t.date === today);
+    const active = todayTx.filter(t => t.status !== 'void');
+    const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
+    const discount = todayTx.reduce((s, t) => s + (t.discount || 0), 0);
+    const tax = todayTx.reduce((s, t) => s + (t.tax || 0), 0);
+    const voidAmount = todayTx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
+    const refundAmount = todayTx.reduce((s, t) => s + (t.refundAmount || 0), 0);
+    const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
+    const net = sales - expense;
+    const gross = sales + discount;
+
+    const byOutlet = {};
+    active.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + (t.total - (t.refundAmount || 0)); });
+    const byCashier = {};
+    active.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + (t.total - (t.refundAmount || 0)); });
+
+    const cashierRecap = {};
+    todayTx.forEach(t => {
+      const k = t.cashier;
+      if (!cashierRecap[k]) cashierRecap[k] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
+      if (t.status === 'void') { cashierRecap[k].voidCount++; cashierRecap[k].voidAmount += t.total; }
+      if (t.status === 'refunded' || t.status === 'partial_refund') {
+        cashierRecap[k].refundCount++;
+        cashierRecap[k].refundAmount += (t.refundAmount || 0);
+      }
+    });
+
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h2>Laporan</h2><div class="sub">Periode: Hari ini</div></div>
+        ${tab !== 'expenses' ? '<button class="btn btn-ghost" id="export">Export XLSX</button>' : ''}
+      </div>
+
+      <div class="seg-tabs" role="tablist">
+        ${TABS.map(t => `
+          <button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+            <span>${t.label}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      ${tab === 'transactions' ? `
+        <div class="kpi-hero">
+          <div class="label">Penjualan hari ini</div>
+          <div class="amount">${rupiah(sales)}</div>
+          <div class="delta">${active.length} transaksi</div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
+          <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
+          <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
+          <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
+        </div>
+        ${Object.keys(cashierRecap).length ? `
+          <div class="section-title">Rekap per kasir</div>
+          <div class="tx-list">
+            ${Object.entries(cashierRecap).map(([name, r]) => `
+              <div class="cashier-recap-row">
+                <div><div class="cr-name">${name}</div><div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div></div>
+                <div class="cr-amount">${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}</div>
+              </div>`).join('')}
+          </div>` : ''}
+        <div class="section-title">Transaksi terbaru</div>
+        <div class="tx-list">
+          ${todayTx.length ? todayTx.map(renderTxItem).join('') : '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}
+        </div>
+      ` : ''}
+
+      ${tab === 'expenses' ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${state.expenses.length} catatan</div></div>
+          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
+        </div>
+        <div class="kpi-hero">
+          <div class="label">Total pengeluaran</div>
+          <div class="amount amount-expense">${rupiah(expense)}</div>
+        </div>
+        <div class="kpi-compact" style="margin-bottom:16px">
+          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
+            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
+            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
+          }).join('')}
+        </div>
+        <div class="tx-list">
+          ${state.expenses.length ? state.expenses.map(e => `
+            <div class="list-row">
+              <div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
+                <div class="row-actions">
+                  <button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+                  <button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+                </div>
+              </div>
+            </div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
+        </div>
+      ` : ''}
+
+      ${tab === 'reports' ? `
+        <div class="section-title" style="margin-top:0">Ringkasan keuangan</div>
+        <div class="waterfall">
+          <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
+          <div class="shift-row"><span class="lbl">Diskon</span><span class="val" style="color:var(--alert)">- ${rupiah(discount)}</span></div>
+          <div class="shift-row"><span class="lbl">Pajak</span><span class="val" style="color:var(--alert)">- ${rupiah(tax)}</span></div>
+          ${voidAmount > 0 ? `<div class="shift-row"><span class="lbl">Void</span><span class="val" style="color:var(--alert)">- ${rupiah(voidAmount)}</span></div>` : ''}
+          ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
+          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
+          <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
+          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
+            <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
+            <span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span>
+          </div>
+        </div>
+        <div class="kpi-compact">
+          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
+          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
+        </div>
+        <div class="section-title">Penjualan per outlet</div>
+        <div class="tx-list">
+          ${Object.entries(byOutlet).map(([name, total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
+        </div>
+        <div class="section-title">Penjualan per kasir</div>
+        <div class="tx-list">
+          ${Object.entries(byCashier).map(([name, total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">7 hari terakhir</div>
+          <div class="bar-chart">
+            ${[1200, 1800, 1400, 2100, 1900, 2200, Math.round(sales/1000)].map((v, i) => {
+              const max = Math.max(1200, 1800, 1400, 2100, 1900, 2200, Math.round(sales/1000), 1000);
+              const h = Math.max(8, (v / max) * 100);
+              const days = ['S','S','R','K','J','S','M'];
+              return `<div class="bar-col"><div class="bar ${i === 6 ? 'today' : ''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Metode pembayaran</div>
+          <div class="method-row">
+            <span class="method-label">Cash</span>
+            <div class="method-bar"><div class="method-fill cash" style="width:${sales ? (cash/sales*100) : 0}%"></div></div>
+            <span class="method-amount">${rupiah(cash)}</span>
+          </div>
+          <div class="method-row">
+            <span class="method-label">QRIS</span>
+            <div class="method-bar"><div class="method-fill qris" style="width:${sales ? (qris/sales*100) : 0}%"></div></div>
+            <span class="method-amount">${rupiah(qris)}</span>
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    $$('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+    if ($('#export')) $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+
+    if (tab === 'expenses') {
+      const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+      $('#add-exp-report').onclick = () => expForm(null, CATS, render);
+      $$('[data-edit-exp]').forEach(b => b.onclick = () => expForm(b.getAttribute('data-edit-exp'), CATS, render));
+      $$('[data-del-exp]').forEach(b => b.onclick = () => {
+        const id = b.getAttribute('data-del-exp');
+        const e = state.expenses.find(x => x.id === id);
+        if (!e) return;
+        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
+          state.expenses = state.expenses.filter(x => x.id !== id);
+          render();
+          toast('Pengeluaran dihapus');
+        });
+      });
+    }
+    $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
+  };
+  render();
+}
+
 // SIDEBAR
 function renderSidebar() {
   const body = $('#sidebar-body');
@@ -1640,7 +1919,7 @@ function backHome() {
     else if (hasPerm('transactions')) state.activeView = 'transactions';
     else if (hasPerm('shift')) state.activeView = 'shift';
   } else {
-    state.ownerTab = 'dashboard';
+    state.ownerTab = 'pos';
   }
   renderNav();
   renderMain();
@@ -2118,7 +2397,7 @@ function workerForm(id) {
   };
 }
 
-// QRIS SETTINGS
+// QRIS
 function pageQRIS() {
   const main = $('#main');
   const render = () => {
@@ -2174,7 +2453,7 @@ function pageQRIS() {
   render();
 }
 
-// PRINTER SETTINGS
+// PRINTER
 function pagePrinterSettings() {
   const main = $('#main');
   const render = () => {
@@ -2219,7 +2498,7 @@ function pagePrinterSettings() {
   render();
 }
 
-// RECEIPT SETTINGS
+// RECEIPT
 function pageReceiptSettings() {
   const main = $('#main');
   const r = state.settings.receipt;
@@ -2276,7 +2555,7 @@ ${r.footer}`.trim();
   render();
 }
 
-// NOTIF SETTINGS
+// NOTIF
 function pageNotifSettings() {
   const main = $('#main');
   const n = state.settings.notifications;
@@ -2298,7 +2577,7 @@ function pageNotifSettings() {
   });
 }
 
-// SYNC SETTINGS
+// SYNC
 function pageSyncSettings() {
   const main = $('#main');
   const render = () => {
@@ -2328,7 +2607,7 @@ function pageSyncSettings() {
   render();
 }
 
-// SECURITY SETTINGS
+// SECURITY
 function pageSecuritySettings() {
   const main = $('#main');
   const sec = state.settings.security;
@@ -2410,7 +2689,7 @@ function pageAuditLog() {
   render();
 }
 
-// THEME SETTINGS
+// THEME
 function pageThemeSettings() {
   const main = $('#main');
   const render = () => {
@@ -2476,7 +2755,7 @@ function pageAbout() {
   $('#back-home').onclick = backHome;
 }
 
-// EXPENSES (kasir)
+// EXPENSES
 function pageExpenses() {
   const main = $('#main');
   const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
@@ -2573,193 +2852,6 @@ function expForm(id, CATS, onDone) {
     if (typeof onDone === 'function') onDone();
     toast('Pengeluaran disimpan', 'success');
   };
-}
-
-// REPORTS
-function renderReports(main) {
-  let tab = 'summary';
-  const TABS = [
-    { id: 'summary', label: 'Ringkasan' },
-    { id: 'outlet', label: 'Outlet' },
-    { id: 'cashier', label: 'Kasir' },
-    { id: 'daily', label: 'Harian' },
-    { id: 'monthly', label: 'Bulanan' },
-    { id: 'finance', label: 'Keuangan' },
-    { id: 'expense', label: 'Pengeluaran' },
-  ];
-
-  const render = () => {
-    const today = todayStr();
-    const monthPrefix = today.slice(0, 7);
-    const todayTx = state.transactions.filter(t => t.date === today);
-    const monthTx = state.transactions.filter(t => t.date.startsWith(monthPrefix));
-    const tx = tab === 'monthly' ? monthTx : todayTx;
-
-    const active = tx.filter(t => t.status !== 'void');
-    const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-    const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-    const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-    const discount = tx.reduce((s, t) => s + (t.discount || 0), 0);
-    const tax = tx.reduce((s, t) => s + (t.tax || 0), 0);
-    const voidAmount = tx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
-    const refundAmount = tx.reduce((s, t) => s + (t.refundAmount || 0), 0);
-    const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
-    const net = sales - expense;
-    const gross = sales + discount;
-
-    const byOutlet = {};
-    active.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + (t.total - (t.refundAmount || 0)); });
-    const byCashier = {};
-    active.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + (t.total - (t.refundAmount || 0)); });
-
-    main.innerHTML = `
-      <div class="page-head">
-        <div><h2>Laporan</h2><div class="sub">Periode: ${tab === 'monthly' ? 'Bulan ini' : 'Hari ini'}</div></div>
-        ${tab !== 'expense' ? '<button class="btn btn-ghost" id="export">Export XLSX</button>' : ''}
-      </div>
-      <div class="tabs">
-        ${TABS.map(t => `<button data-tab="${t.id}" class="${tab === t.id ? 'active' : ''}">${t.label}</button>`).join('')}
-      </div>
-      ${tab === 'summary' ? `
-        <div class="kpi-hero">
-          <div class="label">Penjualan hari ini</div>
-          <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${active.length} transaksi</div>
-        </div>
-        <div class="kpi-compact">
-          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-          <div><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
-          <div><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
-        </div>
-        <div class="kpi-compact">
-          <div><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
-          <div><div class="label">Laba bersih</div><div class="amount">${rupiah(net)}</div></div>
-        </div>
-      ` : ''}
-      ${tab === 'outlet' ? `
-        <div class="section-title">Penjualan per outlet</div>
-        <div class="tx-list">
-          ${Object.entries(byOutlet).map(([name, total]) => `
-            <div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>
-          `).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
-        </div>
-      ` : ''}
-      ${tab === 'cashier' ? `
-        <div class="section-title">Penjualan per kasir</div>
-        <div class="tx-list">
-          ${Object.entries(byCashier).map(([name, total]) => `
-            <div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>
-          `).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
-        </div>
-      ` : ''}
-      ${tab === 'daily' ? `
-        <div class="kpi-hero">
-          <div class="label">Penjualan hari ini</div>
-          <div class="amount">${rupiah(sales)}</div>
-        </div>
-        <div class="kpi-compact">
-          <div><div class="label">Transaksi</div><div class="amount">${active.length}</div></div>
-          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-          <div><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
-        </div>
-      ` : ''}
-      ${tab === 'monthly' ? `
-        <div class="kpi-hero">
-          <div class="label">Penjualan bulan ini</div>
-          <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${active.length} transaksi</div>
-        </div>
-        <div class="kpi-compact">
-          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-          <div><div class="label">Pengeluaran</div><div class="amount">${rupiah(expense)}</div></div>
-          <div><div class="label">Laba</div><div class="amount">${rupiah(sales - expense)}</div></div>
-        </div>
-      ` : ''}
-      ${tab === 'finance' ? `
-        <div class="section-title">Ringkasan keuangan</div>
-        <div class="waterfall">
-          <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
-          <div class="shift-row"><span class="lbl">Diskon</span><span class="val" style="color:var(--alert)">- ${rupiah(discount)}</span></div>
-          <div class="shift-row"><span class="lbl">Pajak</span><span class="val" style="color:var(--alert)">- ${rupiah(tax)}</span></div>
-          ${voidAmount > 0 ? `<div class="shift-row"><span class="lbl">Void</span><span class="val" style="color:var(--alert)">- ${rupiah(voidAmount)}</span></div>` : ''}
-          ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
-          <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
-          <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
-          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
-            <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
-            <span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span>
-          </div>
-        </div>
-        <div class="kpi-compact">
-          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-        </div>
-      ` : ''}
-      ${tab === 'expense' ? `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-          <div>
-            <div style="font-weight:600">Pengeluaran</div>
-            <div class="muted small">${state.expenses.length} catatan</div>
-          </div>
-          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
-        </div>
-        <div class="kpi-hero">
-          <div class="label">Total pengeluaran</div>
-          <div class="amount amount-expense">${rupiah(expense)}</div>
-        </div>
-        <div class="kpi-compact" style="margin-bottom:16px">
-          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
-            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
-            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
-          }).join('')}
-        </div>
-        <div class="tx-list">
-          ${state.expenses.length ? state.expenses.map(e => `
-            <div class="list-row">
-              <div>
-                <div class="row-title">${e.note || e.category}</div>
-                <div class="row-sub">${e.category} · ${e.date} · ${e.by}</div>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
-                <div class="row-actions">
-                  <button class="icon-btn sm" data-edit-exp="${e.id}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                  </button>
-                  <button class="icon-btn sm" data-del-exp="${e.id}">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>`).join('')
-          : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
-        </div>
-      ` : ''}
-    `;
-
-    $$('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-    if ($('#export')) $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
-
-    if (tab === 'expense') {
-      const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
-      $('#add-exp-report').onclick = () => expForm(null, CATS, render);
-      $$('[data-edit-exp]').forEach(b => b.onclick = () => expForm(b.getAttribute('data-edit-exp'), CATS, render));
-      $$('[data-del-exp]').forEach(b => b.onclick = () => {
-        const id = b.getAttribute('data-del-exp');
-        const e = state.expenses.find(x => x.id === id);
-        if (!e) return;
-        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
-          state.expenses = state.expenses.filter(x => x.id !== e.id);
-          render();
-          toast('Pengeluaran dihapus');
-        });
-      });
-    }
-  };
-  render();
 }
 
 // HEADER ACTIONS
