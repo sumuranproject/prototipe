@@ -479,6 +479,7 @@ function renderNav() {
     if (hasPerm('pos'))          items.push(navItem('pos', 'POS', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
     if (hasPerm('transactions')) items.push(navItem('transactions', 'Transaksi', '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>'));
     if (hasPerm('shift'))        items.push(navItem('shift', 'Shift', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'));
+    if (state.activeView === 'checkout') items.push(navItem('checkout', 'Checkout', '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
     nav.innerHTML = items.length ? items.join('') : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
   } else {
     nav.innerHTML = `
@@ -647,14 +648,19 @@ function renderCartBar() {
   const count = state.cart.reduce((s, i) => s + i.qty, 0);
   const { total } = calculateTotals(state.cart);
   host.innerHTML = `
-    <button class="cart-bar" id="cart-bar-btn">
+    <button class="cart-bar" id="cart-bar-btn" aria-label="Buka checkout">
       <div>
-        <div class="cart-count">${count} item</div>
+        <div class="cart-count">${count} item siap dibayar</div>
         <div class="cart-total">${rupiah(total)}</div>
       </div>
       <span class="cart-cta">Lihat Cart</span>
     </button>`;
-  $('#cart-bar-btn').onclick = openCartSheet;
+  $('#cart-bar-btn').onclick = () => {
+    if (state.user.role === 'cashier') state.activeView = 'checkout';
+    else state.ownerTab = 'checkout';
+    renderNav();
+    renderMain();
+  };
 }
 
 function openCartSheet() {
@@ -806,8 +812,8 @@ function openCheckout() {
       <div class="summary-row"><span>Subtotal</span><span id="ck-subtotal">${rupiah(t.subtotal)}</span></div>
       <div class="summary-row"><span>Diskon</span><span id="ck-discount-row" style="color:var(--alert)">${t.discount > 0 ? '-' + rupiah(t.discount) : ''}</span></div>
       <div class="summary-row"><span>Pajak ${taxPct}%</span><span id="ck-tax-row">${t.tax > 0 ? rupiah(t.tax) : ''}</span></div>
-      <div class="summary-row total"><span>Total</span><span id="ck-total">${rupiah(t.total)}</span></div>
-      <div style="display:grid;gap:8px;margin-top:16px">
+      <div class="payment-sheet-footer">
+        <div class="summary-row total"><span>Total</span><span id="ck-total">${rupiah(t.total)}</span></div>
         <button class="btn btn-primary btn-block" id="pay-btn" ${canPay ? '' : 'disabled'}>
           ${method === 'qris' && !qrisProof ? 'Ambil bukti QRIS dulu' : 'Bayar ' + rupiah(t.total)}
         </button>
@@ -925,8 +931,6 @@ function showSuccess(tx) {
 function renderCheckout(main) {
   const cartCount = state.cart.reduce((s, i) => s + i.qty, 0);
   const { subtotal } = calculateTotals(state.cart);
-  const today = todayStr();
-  const todayTx = state.transactions.filter(t => t.date === today);
 
   main.innerHTML = `
     <div class="page-head">
@@ -938,7 +942,7 @@ function renderCheckout(main) {
     </div>
 
     ${cartCount ? `
-      <div class="checkout-panel">
+      <div class="checkout-panel checkout-content">
         <div class="checkout-items">
           ${state.cart.map(item => `
             <div class="checkout-item">
@@ -955,10 +959,15 @@ function renderCheckout(main) {
             </div>
           `).join('')}
         </div>
-        <div class="summary-row total"><span>Total</span><span>${rupiah(subtotal)}</span></div>
-        <button class="btn btn-primary btn-block" id="pay-now" style="margin-top:12px">
-          Bayar sekarang · ${rupiah(subtotal)}
-        </button>
+        <div class="summary-row"><span>Subtotal</span><span>${rupiah(subtotal)}</span></div>
+        <div class="checkout-note muted small">Periksa item dan jumlah sebelum melanjutkan pembayaran.</div>
+      </div>
+      <div class="checkout-sticky-bar">
+        <div class="checkout-sticky-total">
+          <span>Total</span>
+          <strong>${rupiah(subtotal)}</strong>
+        </div>
+        <button class="btn btn-primary btn-block" id="pay-now">Bayar sekarang</button>
       </div>
     ` : `
       <div class="empty">
@@ -967,20 +976,16 @@ function renderCheckout(main) {
           <path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
         </svg>
         <div class="empty-title">Cart masih kosong</div>
-        <div class="empty-sub">Buka tab POS untuk memilih produk, lalu kembali ke sini untuk membayar.</div>
+        <div class="empty-sub">Buka POS untuk memilih produk, lalu kembali ke checkout.</div>
         <button class="btn btn-primary" id="go-pos">Buka POS</button>
       </div>
     `}
-
-    <div class="section-title">Transaksi hari ini</div>
-    <div class="tx-list">
-      ${todayTx.length ? todayTx.map(renderTxItem).join('')
-        : '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}
-    </div>
   `;
 
   if ($('#go-pos')) $('#go-pos').onclick = () => {
-    state.ownerTab = 'pos'; renderNav(); renderMain();
+    if (state.user.role === 'cashier') state.activeView = 'pos';
+    else state.ownerTab = 'pos';
+    renderNav(); renderMain();
   };
   if ($('#clear-cart-page')) $('#clear-cart-page').onclick = () => {
     confirmModal('Kosongkan cart?', 'Semua item akan dihapus.', 'Kosongkan', () => {
@@ -988,7 +993,7 @@ function renderCheckout(main) {
     });
   };
   if ($('#pay-now')) $('#pay-now').onclick = () => openCheckout();
-  $$('[data-act]').forEach(btn => {
+  $$('.checkout-content [data-act]').forEach(btn => {
     btn.onclick = () => {
       const id = parseInt(btn.dataset.id);
       const item = state.cart.find(x => x.id === id);
@@ -1002,21 +1007,21 @@ function renderCheckout(main) {
         if (item.qty <= 0) state.cart = state.cart.filter(x => x.id !== id);
       }
       renderCheckout(main);
+      renderCartBar();
     };
   });
-  $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
 
-// TRANSACTIONS
+
 function renderTransactions(main) {
   const isOwner = state.user.role === 'owner';
   const list = isOwner ? state.transactions : state.transactions.filter(t => t.cashierId === state.user.username);
   main.innerHTML = `
     <div class="page-head">
-      <div><h2>Transaksi</h2><div class="sub">${list.length} transaksi</div></div>
+      <div><h2>Transaksi</h2><div class="sub">Riwayat transaksi · ${list.length} transaksi</div></div>
     </div>
     <div class="filter-bar">
-      <button class="chip active">Hari ini</button>
+      <button class="chip active">Semua</button>
       <button class="chip">Cash</button>
       <button class="chip">QRIS</button>
       ${isOwner ? '<button class="chip">Semua outlet</button>' : ''}
@@ -1026,11 +1031,12 @@ function renderTransactions(main) {
         <div class="empty">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>
           <div class="empty-title">Belum ada transaksi</div>
-          <div class="empty-sub">Transaksi hari ini akan muncul di sini.</div>
+          <div class="empty-sub">Riwayat transaksi akan muncul di sini.</div>
         </div>`}
     </div>`;
   $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
 }
+
 
 function txStatusBadge(tx) {
   if (tx.status === 'void') return '<span class="tx-status void">⚠ VOID</span>';
@@ -1582,28 +1588,42 @@ function renderDashboard(main) {
 
 // REPORTS
 function renderReports(main) {
-  let tab = 'transactions';
+  let tab = 'reports';
   const TABS = [
-    { id: 'transactions', label: 'Transaksi',
-      icon: '<path d="M5 3h14a2 2 0 0 1 2 2v16l-3-2-3 2-3-2-3 2-3-2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/>' },
-    { id: 'expenses', label: 'Pengeluaran',
-      icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14" r="1"/>' },
-    { id: 'reports', label: 'Laporan',
-      icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
+    { id: 'reports', label: 'Laporan', icon: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>' },
+    { id: 'expenses', label: 'Pengeluaran', icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 10h20"/><circle cx="17" cy="14" r="1"/>' },
   ];
+  let period = 'today';
+  let userFilter = 'all';
+
+  const getRange = () => {
+    const today = todayStr();
+    const d = new Date(today + 'T00:00:00');
+    if (period === '7d') d.setDate(d.getDate() - 6);
+    if (period === '30d') d.setDate(d.getDate() - 29);
+    return { from: d.toISOString().slice(0,10), to: today };
+  };
+  const periodLabel = () => ({ today: 'Hari ini', '7d': '7 hari terakhir', '30d': '30 hari terakhir' }[period] || 'Hari ini');
 
   const render = () => {
-    const today = todayStr();
-    const todayTx = state.transactions.filter(t => t.date === today);
-    const active = todayTx.filter(t => t.status !== 'void');
+    const range = getRange();
+    let filteredTx = state.transactions.filter(t => t.date >= range.from && t.date <= range.to);
+    if (userFilter !== 'all') filteredTx = filteredTx.filter(t => t.cashierId === userFilter);
+    let filteredExpenses = state.expenses.filter(e => e.date.slice(0,10) >= range.from && e.date.slice(0,10) <= range.to);
+    if (userFilter !== 'all') filteredExpenses = filteredExpenses.filter(e => {
+      const w = state.workers.find(x => x.username === userFilter);
+      return !w || e.by === w.displayName || e.by === w.displayName.split(' ')[0];
+    });
+
+    const active = filteredTx.filter(t => t.status !== 'void');
     const sales = active.reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const cash = active.filter(t => t.method === 'cash').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
     const qris = active.filter(t => t.method === 'qris').reduce((s, t) => s + (t.total - (t.refundAmount || 0)), 0);
-    const discount = todayTx.reduce((s, t) => s + (t.discount || 0), 0);
-    const tax = todayTx.reduce((s, t) => s + (t.tax || 0), 0);
-    const voidAmount = todayTx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
-    const refundAmount = todayTx.reduce((s, t) => s + (t.refundAmount || 0), 0);
-    const expense = state.expenses.reduce((s, e) => s + e.amount, 0);
+    const discount = filteredTx.reduce((s, t) => s + (t.discount || 0), 0);
+    const tax = filteredTx.reduce((s, t) => s + (t.tax || 0), 0);
+    const voidAmount = filteredTx.filter(t => t.status === 'void').reduce((s, t) => s + t.total, 0);
+    const refundAmount = filteredTx.reduce((s, t) => s + (t.refundAmount || 0), 0);
+    const expense = filteredExpenses.reduce((s, e) => s + e.amount, 0);
     const net = sales - expense;
     const gross = sales + discount;
 
@@ -1611,92 +1631,44 @@ function renderReports(main) {
     active.forEach(t => { byOutlet[t.outlet] = (byOutlet[t.outlet] || 0) + (t.total - (t.refundAmount || 0)); });
     const byCashier = {};
     active.forEach(t => { byCashier[t.cashier] = (byCashier[t.cashier] || 0) + (t.total - (t.refundAmount || 0)); });
-
     const cashierRecap = {};
-    todayTx.forEach(t => {
+    filteredTx.forEach(t => {
       const k = t.cashier;
       if (!cashierRecap[k]) cashierRecap[k] = { voidCount: 0, voidAmount: 0, refundCount: 0, refundAmount: 0 };
       if (t.status === 'void') { cashierRecap[k].voidCount++; cashierRecap[k].voidAmount += t.total; }
       if (t.status === 'refunded' || t.status === 'partial_refund') {
-        cashierRecap[k].refundCount++;
-        cashierRecap[k].refundAmount += (t.refundAmount || 0);
+        cashierRecap[k].refundCount++; cashierRecap[k].refundAmount += (t.refundAmount || 0);
       }
     });
 
     main.innerHTML = `
       <div class="page-head">
-        <div><h2>Laporan</h2><div class="sub">Periode: Hari ini</div></div>
-        ${tab !== 'expenses' ? '<button class="btn btn-ghost" id="export">Export XLSX</button>' : ''}
+        <div><h2>Laporan</h2><div class="sub">${periodLabel()}${userFilter !== 'all' ? ' · ' + (state.workers.find(w => w.username === userFilter)?.displayName || userFilter) : ''}</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" id="report-filter">Filter</button>
+          <button class="btn btn-ghost" id="export">Export XLSX</button>
+        </div>
       </div>
 
       <div class="seg-tabs" role="tablist">
-        ${TABS.map(t => `
-          <button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
-            <span>${t.label}</span>
-          </button>
-        `).join('')}
+        ${TABS.map(t => `<button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg><span>${t.label}</span>
+        </button>`).join('')}
       </div>
 
-      ${tab === 'transactions' ? `
-        <div class="kpi-hero">
-          <div class="label">Penjualan hari ini</div>
-          <div class="amount">${rupiah(sales)}</div>
-          <div class="delta">${active.length} transaksi</div>
-        </div>
+      ${tab === 'reports' ? `
+        <div class="kpi-hero"><div class="label">Penjualan</div><div class="amount">${rupiah(sales)}</div><div class="delta">${active.length} transaksi</div></div>
         <div class="kpi-grid">
           <div class="kpi-card"><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
           <div class="kpi-card"><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
           <div class="kpi-card"><div class="label">Void</div><div class="amount" style="color:var(--alert)">${rupiah(voidAmount)}</div></div>
           <div class="kpi-card"><div class="label">Refund</div><div class="amount" style="color:var(--warn)">${rupiah(refundAmount)}</div></div>
         </div>
-        ${Object.keys(cashierRecap).length ? `
-          <div class="section-title">Rekap per kasir</div>
-          <div class="tx-list">
-            ${Object.entries(cashierRecap).map(([name, r]) => `
-              <div class="cashier-recap-row">
-                <div><div class="cr-name">${name}</div><div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div></div>
-                <div class="cr-amount">${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}</div>
-              </div>`).join('')}
-          </div>` : ''}
-        <div class="section-title">Transaksi terbaru</div>
+        <div class="section-title">Rekap per kasir</div>
         <div class="tx-list">
-          ${todayTx.length ? todayTx.map(renderTxItem).join('') : '<div class="empty"><div class="empty-title">Belum ada transaksi</div></div>'}
+          ${Object.entries(cashierRecap).map(([name, r]) => `<div class="cashier-recap-row"><div><div class="cr-name">${name}</div><div class="cr-sub">Void ${r.voidCount}× · Refund ${r.refundCount}×</div></div><div class="cr-amount">${r.voidAmount + r.refundAmount > 0 ? '-' + rupiah(r.voidAmount + r.refundAmount) : rupiah(0)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data rekap</div></div>'}
         </div>
-      ` : ''}
-
-      ${tab === 'expenses' ? `
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
-          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${state.expenses.length} catatan</div></div>
-          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
-        </div>
-        <div class="kpi-hero">
-          <div class="label">Total pengeluaran</div>
-          <div class="amount amount-expense">${rupiah(expense)}</div>
-        </div>
-        <div class="kpi-compact" style="margin-bottom:16px">
-          ${['Bahan','Operasional','Gaji','Lainnya'].map(cat => {
-            const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
-            return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
-          }).join('')}
-        </div>
-        <div class="tx-list">
-          ${state.expenses.length ? state.expenses.map(e => `
-            <div class="list-row">
-              <div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
-                <div class="row-actions">
-                  <button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-                  <button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
-                </div>
-              </div>
-            </div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}
-        </div>
-      ` : ''}
-
-      ${tab === 'reports' ? `
-        <div class="section-title" style="margin-top:0">Ringkasan keuangan</div>
+        <div class="section-title">Ringkasan keuangan</div>
         <div class="waterfall">
           <div class="shift-row"><span class="lbl">Gross sales</span><span class="val">${rupiah(gross)}</span></div>
           <div class="shift-row"><span class="lbl">Diskon</span><span class="val" style="color:var(--alert)">- ${rupiah(discount)}</span></div>
@@ -1705,74 +1677,67 @@ function renderReports(main) {
           ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
           <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
           <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expense)}</span></div>
-          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
-            <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
-            <span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span>
-          </div>
+          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px"><span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span><span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span></div>
         </div>
-        <div class="kpi-compact">
-          <div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div>
-          <div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div>
-        </div>
+        <div class="kpi-compact"><div><div class="label">Cash</div><div class="amount">${rupiah(cash)}</div></div><div><div class="label">QRIS</div><div class="amount">${rupiah(qris)}</div></div></div>
         <div class="section-title">Penjualan per outlet</div>
-        <div class="tx-list">
-          ${Object.entries(byOutlet).map(([name, total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
-        </div>
+        <div class="tx-list">${Object.entries(byOutlet).map(([name,total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}</div>
         <div class="section-title">Penjualan per kasir</div>
-        <div class="tx-list">
-          ${Object.entries(byCashier).map(([name, total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}
+        <div class="tx-list">${Object.entries(byCashier).map(([name,total]) => `<div class="list-row"><div class="row-title">${name}</div><div class="row-amount">${rupiah(total)}</div></div>`).join('') || '<div class="empty"><div class="empty-title">Belum ada data</div></div>'}</div>
+        <div class="chart-card"><div class="chart-title">7 hari terakhir</div><div class="bar-chart">
+          ${[1200,1800,1400,2100,1900,2200,Math.round(sales/1000)].map((v,i)=>{const max=Math.max(2200,Math.round(sales/1000),1000);const h=Math.max(8,(v/max)*100);const days=['S','S','R','K','J','S','M'];return `<div class="bar-col"><div class="bar ${i===6?'today':''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`}).join('')}
+        </div></div>
+        <div class="chart-card"><div class="chart-title">Metode pembayaran</div>
+          <div class="method-row"><span class="method-label">Cash</span><div class="method-bar"><div class="method-fill cash" style="width:${sales ? cash/sales*100 : 0}%"></div></div><span class="method-amount">${rupiah(cash)}</span></div>
+          <div class="method-row"><span class="method-label">QRIS</span><div class="method-bar"><div class="method-fill qris" style="width:${sales ? qris/sales*100 : 0}%"></div></div><span class="method-amount">${rupiah(qris)}</span></div>
         </div>
-        <div class="chart-card">
-          <div class="chart-title">7 hari terakhir</div>
-          <div class="bar-chart">
-            ${[1200, 1800, 1400, 2100, 1900, 2200, Math.round(sales/1000)].map((v, i) => {
-              const max = Math.max(1200, 1800, 1400, 2100, 1900, 2200, Math.round(sales/1000), 1000);
-              const h = Math.max(8, (v / max) * 100);
-              const days = ['S','S','R','K','J','S','M'];
-              return `<div class="bar-col"><div class="bar ${i === 6 ? 'today' : ''}" style="height:${h}%"></div><div class="bar-day">${days[i]}</div></div>`;
-            }).join('')}
-          </div>
+      ` : `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+          <div><div style="font-weight:600">Pengeluaran</div><div class="muted small">${filteredExpenses.length} catatan · ${periodLabel()}</div></div>
+          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
         </div>
-        <div class="chart-card">
-          <div class="chart-title">Metode pembayaran</div>
-          <div class="method-row">
-            <span class="method-label">Cash</span>
-            <div class="method-bar"><div class="method-fill cash" style="width:${sales ? (cash/sales*100) : 0}%"></div></div>
-            <span class="method-amount">${rupiah(cash)}</span>
-          </div>
-          <div class="method-row">
-            <span class="method-label">QRIS</span>
-            <div class="method-bar"><div class="method-fill qris" style="width:${sales ? (qris/sales*100) : 0}%"></div></div>
-            <span class="method-amount">${rupiah(qris)}</span>
-          </div>
-        </div>
-      ` : ''}
+        <div class="kpi-hero"><div class="label">Total pengeluaran</div><div class="amount amount-expense">${rupiah(expense)}</div></div>
+        <div class="kpi-compact" style="margin-bottom:16px">${['Bahan','Operasional','Gaji','Lainnya'].map(cat=>{const sum=filteredExpenses.filter(e=>e.category===cat).reduce((s,e)=>s+e.amount,0);return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`}).join('')}</div>
+        <div class="tx-list">${filteredExpenses.length ? filteredExpenses.map(e=>`<div class="list-row"><div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div><div style="display:flex;align-items:center;gap:8px"><div class="row-amount amount-expense">-${rupiah(e.amount)}</div><div class="row-actions"><button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="icon-btn sm" data-del-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button></div></div></div>`).join('') : '<div class="empty"><div class="empty-title">Belum ada pengeluaran</div></div>'}</div>
+      `}
     `;
 
     $$('[data-tab]').forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-    if ($('#export')) $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+    $('#export').onclick = () => toast('Export XLSX diproses backend', 'success');
+    $('#report-filter').onclick = () => openReportFilter();
 
     if (tab === 'expenses') {
-      const CATS = ['Bahan', 'Operasional', 'Gaji', 'Lainnya'];
+      const CATS = ['Bahan','Operasional','Gaji','Lainnya'];
       $('#add-exp-report').onclick = () => expForm(null, CATS, render);
       $$('[data-edit-exp]').forEach(b => b.onclick = () => expForm(b.getAttribute('data-edit-exp'), CATS, render));
       $$('[data-del-exp]').forEach(b => b.onclick = () => {
-        const id = b.getAttribute('data-del-exp');
-        const e = state.expenses.find(x => x.id === id);
-        if (!e) return;
-        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => {
-          state.expenses = state.expenses.filter(x => x.id !== id);
-          render();
-          toast('Pengeluaran dihapus');
-        });
+        const id = b.getAttribute('data-del-exp'); const e = state.expenses.find(x => x.id === id); if (!e) return;
+        confirmModal('Hapus pengeluaran?', `"${e.note || e.category}" akan dihapus.`, 'Hapus', () => { state.expenses = state.expenses.filter(x => x.id !== id); render(); toast('Pengeluaran dihapus'); });
       });
     }
     $$('.tx-item').forEach(el => el.onclick = () => showTxDetail(el.dataset.id));
   };
+
+  function openReportFilter() {
+    openSheet(`
+      <h3 style="font-size:17px;margin-bottom:14px">Filter laporan</h3>
+      <div class="section-title" style="margin-top:0">Periode waktu</div>
+      <div class="filter-choice-grid">
+        <button class="btn ${period==='today'?'btn-primary':'btn-ghost'}" data-period="today">Hari ini</button>
+        <button class="btn ${period==='7d'?'btn-primary':'btn-ghost'}" data-period="7d">7 hari</button>
+        <button class="btn ${period==='30d'?'btn-primary':'btn-ghost'}" data-period="30d">30 hari</button>
+      </div>
+      <div class="section-title">User / kasir</div>
+      <label class="field"><span>Filter per user</span><select id="report-user-filter"><option value="all">Semua user</option>${state.workers.filter(w=>w.active).map(w=>`<option value="${w.username}" ${userFilter===w.username?'selected':''}>${w.displayName}</option>`).join('')}</select></label>
+      <button class="btn btn-primary btn-block" id="apply-report-filter" style="margin-top:16px">Terapkan filter</button>
+    `);
+    $$('[data-period]').forEach(b => b.onclick = () => { period=b.dataset.period; openReportFilter(); });
+    $('#apply-report-filter').onclick = () => { userFilter=$('#report-user-filter').value; closeSheet(); render(); };
+  }
   render();
 }
 
-// SIDEBAR
+
 function renderSidebar() {
   const body = $('#sidebar-body');
   if (!body) return;

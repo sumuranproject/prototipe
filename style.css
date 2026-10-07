@@ -658,6 +658,52 @@ img { max-width: 100%; display: block; }
   font-size: 14px;
 }
 
+/* Checkout action stays visible above the bottom navigation while the cart scrolls. */
+.checkout-sticky-bar {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: var(--nav-h);
+  z-index: 29;
+  display: grid;
+  gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0,0,0,.08);
+  backdrop-filter: blur(10px);
+}
+.checkout-sticky-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.checkout-sticky-total strong {
+  color: var(--text);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.checkout-content { padding-bottom: 8px; }
+.checkout-note { margin-top: 12px; }
+.payment-sheet-footer {
+  position: sticky;
+  bottom: -1px;
+  z-index: 3;
+  margin: 12px -20px -8px;
+  padding: 10px 20px calc(8px + env(safe-area-inset-bottom));
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 18px rgba(0,0,0,.06);
+}
+.filter-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
 /* ============================================================
    CART
    ============================================================ */
@@ -1640,6 +1686,7 @@ body.sidebar-open { overflow: hidden; }
   .bottom-nav { display: none; }
   .kpi-grid { grid-template-columns: repeat(4, 1fr); }
   .cart-bar { left: 24px; right: 24px; bottom: 24px; }
+  .checkout-sticky-bar { left: 50%; right: auto; bottom: 16px; width: min(520px, calc(100% - 32px)); transform: translateX(-50%); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .fab { bottom: 24px; right: 24px; }
 }
 @media (min-width: 640px) and (max-width: 899px) {
@@ -1756,4 +1803,7 @@ body.sidebar-open { overflow: hidden; }
     grid-column: 1 / -1;
     text-align: right;
   }
+}
+@media (max-width: 899px) {
+  .app-main:has(.checkout-sticky-bar) { padding-bottom: calc(var(--nav-h) + 116px); }
 }
