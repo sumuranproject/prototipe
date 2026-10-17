@@ -12,6 +12,9 @@ const PERMISSIONS = [
   { id: 'profile',      label: 'Profil',             desc: 'Lihat info akun sendiri' },
 ];
 
+// ICONS
+const ICON_GEAR = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
+
 // STATE
 const state = {
   user: null,
@@ -104,7 +107,7 @@ function hasPerm(id) {
   if (!state.user) return false;
   if (state.user.role === 'owner') return true;
   const p = state.user.permissions;
-  return Array.isArray(p) ? p.includes(id) : true;
+  return Array.isArray(p) ? p.includes(id) : false;
 }
 function rupiah(n) {
   const num = Math.round(n);
@@ -323,7 +326,7 @@ function promptModal(title, label, def, onConfirm) {
     <div class="modal-backdrop" id="modal-bd">
       <div class="modal">
         <h3>${title}</h3>
-        <label class="field" style="margin:12px 0"><span>${label}</span>
+        <label class="field" style="margin:.75rem 0"><span>${label}</span>
           <input type="text" id="prompt-value" value="${def || ''}" /></label>
         <div class="modal-actions">
           <button class="btn btn-ghost" id="modal-cancel">Batal</button>
@@ -352,7 +355,7 @@ function pinModal(title, hint, onConfirm) {
           <input type="password" inputmode="numeric" maxlength="1" data-pin="3" />
         </div>
         <div id="pin-error" class="form-error" hidden></div>
-        <div class="modal-actions" style="margin-top:12px">
+        <div class="modal-actions" style="margin-top:.75rem">
           <button class="btn btn-ghost" id="pin-cancel">Batal</button>
           <button class="btn btn-primary" id="pin-ok">Konfirmasi</button>
         </div>
@@ -509,7 +512,7 @@ $('#login-form').addEventListener('submit', (e) => {
       const w = state.workers.find(x => x.username === 'kasir');
       state.user = {
         username: w.username, displayName: w.displayName, role: 'cashier',
-        outlet: w.outlet, permissions: w.permissions,
+        outlet: w.outlet, permissions: w.permissions, whatsapp: w.whatsapp,
       };
       return enterApp();
     }
@@ -520,6 +523,7 @@ $('#login-form').addEventListener('submit', (e) => {
     if (reg.password !== pass) { errEl.textContent = 'Email atau password salah.'; errEl.hidden = false; return; }
     state.user = {
       username: reg.email, email: reg.email, displayName: reg.name, role: 'owner',
+      whatsapp: reg.whatsapp || '',
     };
     if (reg.business) {
       state.outlet = { id: 1, name: reg.business.name, address: reg.business.address, phone: reg.business.phone, active: true };
@@ -625,7 +629,7 @@ function enterApp() {
   if (state.user.role === 'cashier') {
     if (hasPerm('pos')) state.activeView = 'pos';
     else if (hasPerm('dashboard')) state.activeView = 'dashboard';
-    else state.activeView = 'pos';
+    else state.activeView = 'manage';
   } else {
     state.ownerTab = 'pos';
   }
@@ -633,6 +637,7 @@ function enterApp() {
   renderMain();
   updateSyncIndicator();
   renderOutletChip();
+  renderAvatar();
   renderTabletSidebar();
 }
 
@@ -671,37 +676,43 @@ function doLogout() {
   $('#login-pass').value = '';
   $('#login-error').hidden = true;
   renderTabletSidebar();
+  renderAvatar();
 }
 
 // NAV
 function renderNav() {
   const nav = $('#bottom-nav');
   if (!state.user) { nav.innerHTML = ''; return; }
-  const isManage = (state.user.role === 'owner' && state.ownerTab === 'manage')
-              || (state.user.role === 'cashier' && state.activeView === 'manage');
-  if (isManage) {
-    nav.classList.add('hidden');
-    nav.innerHTML = '';
-    renderTabletSidebar();
-    return;
-  }
   nav.classList.remove('hidden');
-  if (state.user.role === 'cashier') {
-    const items = [];
-    if (hasPerm('pos'))          items.push(navItem('pos', 'Kasir', '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
-    if (hasPerm('pos'))          items.push(navItem('checkout', 'Checkout', '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
-    if (hasPerm('dashboard'))    items.push(navItem('dashboard', 'Laporan', '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>'));
-    nav.innerHTML = items.length ? items.join('') : `<div style="flex:1;text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Tidak ada akses fitur. Hubungi owner.</div>`;
+
+  const isOwner = state.user.role === 'owner';
+  const currentTab = isOwner ? state.ownerTab : state.activeView;
+
+  const items = [];
+  if (isOwner) {
+    items.push(navItem('pos', 'Kasir',
+      '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
+    items.push(navItem('checkout', 'Checkout',
+      '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
+    items.push(navItem('reports', 'Laporan',
+      '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>'));
   } else {
-    nav.innerHTML = `
-      ${navItem('pos', 'Kasir',
-        '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>')}
-      ${navItem('checkout', 'Checkout',
-        '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>')}
-      ${navItem('reports', 'Laporan',
-        '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>')}
-    `;
+    if (hasPerm('pos'))       items.push(navItem('pos', 'Kasir',
+      '<path d="M3 3h18v18H3z"/><path d="M9 3v18"/><path d="M3 9h18"/>'));
+    if (hasPerm('pos'))       items.push(navItem('checkout', 'Checkout',
+      '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>'));
+    if (hasPerm('dashboard')) items.push(navItem('dashboard', 'Laporan',
+      '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-7"/>'));
   }
+
+  items.push(`
+    <button class="nav-item ${currentTab === 'manage' ? 'active' : ''}" data-view="manage" aria-label="Kelola">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_GEAR}</svg>
+      <span>Kelola</span>
+    </button>`);
+
+  nav.innerHTML = items.join('');
+
   $$('.nav-item').forEach(el => {
     el.onclick = () => {
       const v = el.dataset.view;
@@ -725,23 +736,145 @@ function navItem(view, label, svgInner) {
 }
 
 // ROUTER
+// JUDUL HEADER
+const PAGE_TITLES = {
+  checkout: 'Checkout', reports: 'Laporan', dashboard: 'Laporan',
+  transactions: 'Transaksi', shift: 'Shift', manage: 'Kelola',
+};
+const ROUTE_TITLES = {
+  products: 'Produk', categories: 'Kategori', inventory: 'Stok',
+  outlets: 'Outlet', workers: 'Kasir', 'shift-history': 'Riwayat Shift',
+  qris: 'QRIS', printer: 'Printer', receipt: 'Struk',
+  'notif-settings': 'Notifikasi', 'sync-settings': 'Sinkronisasi',
+  'security-settings': 'Keamanan', 'audit-log': 'Audit Log',
+  'theme-settings': 'Tema', profile: 'Profil', about: 'Tentang',
+  'cashier-profile': 'Profil', 'cashier-printer': 'Printer',
+  'cashier-sync': 'Sinkronisasi', 'cashier-theme': 'Tema',
+  'cashier-expenses': 'Pengeluaran',
+};
+function updateHeaderTitle() {
+  const el = $('.app-title');
+  if (!el || !state.user) return;
+  const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
+  let title = null;
+  if (state.manageRoute) title = ROUTE_TITLES[state.manageRoute] || null;
+  else if (v !== 'pos') title = PAGE_TITLES[v] || null;
+  el.textContent = title || 'SakuKasir';
+  $('#view-app').classList.toggle('titled', !!title);
+  syncHeaderSub();
+}
+
+// Teks info kecil (.sub) dipindah ke bawah judul di header
+function syncHeaderSub() {
+  const host = $('.header-left');
+  if (!host) return;
+  let sub = $('#app-sub');
+  if (!sub) {
+    sub = document.createElement('div');
+    sub.id = 'app-sub';
+    sub.className = 'app-sub';
+    sub.hidden = true;
+    host.appendChild(sub);
+  }
+  const titled = $('#view-app').classList.contains('titled');
+  const src = titled ? $('#main .page-head .sub') : null;
+  const txt = src ? src.textContent.trim() : '';
+  sub.textContent = txt;
+  sub.hidden = !txt;
+}
+// Kontrol halaman (search, chip, tab, tombol aksi) dipindah ke header di HP
+const _mqPhone = window.matchMedia('(max-width: 767px), (max-height: 599px)');
+function ensureHeaderSlots() {
+  const hdr = $('.app-header');
+  if (!hdr) return null;
+  let acts = $('#hdr-actions');
+  let tools = $('#hdr-tools');
+  let back = $('#hdr-back');
+  if (!back) {
+    back = document.createElement('div');
+    back.id = 'hdr-back';
+    back.className = 'hdr-back';
+    hdr.insertBefore(back, $('.header-left'));
+  }
+  if (!acts) {
+    acts = document.createElement('div');
+    acts.id = 'hdr-actions';
+    acts.className = 'hdr-actions';
+    hdr.insertBefore(acts, $('.header-right'));
+  }
+  if (!tools) {
+    tools = document.createElement('div');
+    tools.id = 'hdr-tools';
+    tools.className = 'hdr-tools';
+    tools.hidden = true;
+    hdr.appendChild(tools);
+  }
+  return { acts, tools, back };
+}
+function syncHeaderTools() {
+  const main = $('#main');
+  const slots = ensureHeaderSlots();
+  if (!main || !slots) return;
+  const { acts, tools, back } = slots;
+  const srcs = _mqPhone.matches ? main.querySelectorAll('[data-hoist]') : [];
+  if (srcs.length) {
+    tools.replaceChildren();
+    acts.replaceChildren();
+    back.replaceChildren();
+    srcs.forEach(el => {
+      const mark = document.createElement('i');
+      mark.hidden = true;
+      mark.setAttribute('data-hoisted', '');
+      const kind = el.dataset.hoist;
+      el.replaceWith(mark);
+      (kind === 'tools' ? tools : kind === 'back' ? back : acts).appendChild(el);
+    });
+  } else if (!main.querySelector('[data-hoisted]')) {
+    tools.replaceChildren();
+    acts.replaceChildren();
+    back.replaceChildren();
+  }
+  tools.hidden = !tools.firstChild;
+  const v = $('#view-app');
+  v.classList.toggle('has-tools', !!tools.firstChild);
+  v.classList.toggle('has-actions', !!acts.firstChild);
+}
+(function watchHeaderTools() {
+  const main = $('#main');
+  if (!main) return;
+  new MutationObserver(syncHeaderTools)
+    .observe(main, { childList: true, subtree: true });
+  const onChange = () => { if (state.user) renderMain(); };
+  if (_mqPhone.addEventListener) _mqPhone.addEventListener('change', onChange);
+  else if (_mqPhone.addListener) _mqPhone.addListener(onChange);
+})();
+
+(function watchHeaderSub() {
+  const main = $('#main');
+  if (!main) return;
+  new MutationObserver(syncHeaderSub)
+    .observe(main, { childList: true, subtree: true, characterData: true });
+})();
+
 function renderMain() {
   const main = $('#main');
   main.classList.remove('has-sticky-bar');
   main.classList.remove('no-nav');
   main.style.paddingBottom = '';
-  $$('body > .cart-bar, body > .sticky-pay-bar').forEach(el => el.remove());
+  $$('body > .cart-bar, body > .sticky-pay-bar, body > .sticky-save-bar').forEach(el => el.remove());
   if (!state.user) return;
+  updateHeaderTitle();
 
   requestAnimationFrame(() => {
     if (typeof renderTabletSidebar === 'function') renderTabletSidebar();
   });
 
-  const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
-  if (v === 'manage') {
-    main.classList.add('no-nav');
-    return renderManage();
+  if (state.manageRoute === 'profile' || state.manageRoute === 'cashier-profile') {
+    return pageProfile();
   }
+
+  const v = state.user.role === 'cashier' ? state.activeView : state.ownerTab;
+  if (v === 'manage')       return renderManage();
   if (v === 'pos')          return renderPOS(main);
   if (v === 'checkout')     return renderCheckout(main);
   if (v === 'dashboard')    return renderDashboard(main);
@@ -810,8 +943,8 @@ function renderTabletSidebar() {
         ${unread > 0 ? '<span class="badge-dot"></span>' : ''}
         <span>Notifikasi</span>
       </button>
-      <button class="ts-action" id="ts-manage" title="Kelola">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3.5h16"/><path d="M4 12h16"/><path d="M4 20.5h11"/></svg>
+      <button class="ts-action ${currentTab === 'manage' ? 'active' : ''}" id="ts-manage" title="Kelola">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${ICON_GEAR}</svg>
         <span>Kelola</span>
       </button>
     </div>
@@ -844,54 +977,151 @@ function renderTabletSidebar() {
     }
     if (e.target.closest('#ts-outlet'))    return $('#outlet-chip').click();
     if (e.target.closest('#ts-sync'))      return $('#sync-indicator').click();
-    if (e.target.closest('#ts-printer'))   return $('#printer-indicator').click();
+    if (e.target.closest('#ts-printer'))   return goToPrinterSettings();
     if (e.target.closest('#ts-notif'))     return $('#notif-btn').click();
-    if (e.target.closest('#ts-manage'))    return $('#manage-btn').click();
+    if (e.target.closest('#ts-manage'))    return goToManage();
     if (e.target.closest('#ts-logout'))    return handleLogout();
   };
 }
 
-// OUTLET CHIP
+// OUTLET CHIP (chip tersembunyi, jangkar untuk sheet ganti outlet)
 function renderOutletChip() {
   const chip = $('#outlet-chip');
   const nameEl = $('#outlet-name');
-  if (!state.user) { chip.style.display = 'none'; return; }
-  chip.style.display = '';
+  if (!chip || !nameEl) return;
+
+  const isOwner = state.user && state.user.role === 'owner';
+  nameEl.textContent = isOwner ? state.outlet.name : (state.user?.outlet || state.outlet.name);
+
+  chip.onclick = () => {
+    if (!state.user || state.user.role !== 'owner') return;
+    openSheet(`
+      <h3 style="font-size:1.0625rem;margin-bottom:.75rem">Pilih outlet</h3>
+      <div class="tx-list">
+        ${state.outlets.filter(o => o.active).map(o => `
+          <button class="list-row" data-outlet="${o.name}">
+            <div><div class="row-title">${o.name}</div><div class="row-sub">${o.address}</div></div>
+            ${state.outlet.name === o.name ? '<span style="color:var(--primary);font-weight:600">Aktif</span>' : ''}
+          </button>`).join('')}
+      </div>
+    `);
+    $$('[data-outlet]').forEach(b => b.onclick = () => {
+      const o = state.outlets.find(x => x.name === b.dataset.outlet);
+      state.outlet = o;
+      state.settings.receipt.bizName = o.name;
+      closeSheet();
+      renderTabletSidebar();
+      toast('Outlet diganti: ' + o.name);
+    });
+  };
+}
+
+// AVATAR
+function renderAvatar() {
+  const btn = $('#avatar-btn');
+  if (!btn) return;
+  if (!state.user) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.textContent = state.user.displayName.charAt(0).toUpperCase();
+  btn.onclick = openAccountSheet;
+}
+
+function openAccountSheet() {
+  if (!state.user) return;
   const isOwner = state.user.role === 'owner';
-  const chev = chip.querySelector('svg');
-  if (isOwner) {
-    nameEl.textContent = state.outlet.name;
-    chip.style.cursor = 'pointer';
-    chip.style.pointerEvents = '';
-    if (chev) chev.style.display = '';
-    chip.onclick = () => {
-      openSheet(`
-        <h3 style="font-size:17px;margin-bottom:12px">Pilih outlet</h3>
-        <div class="tx-list">
-          ${state.outlets.filter(o => o.active).map(o => `
-            <button class="list-row" data-outlet="${o.name}">
-              <div><div class="row-title">${o.name}</div><div class="row-sub">${o.address}</div></div>
-              ${state.outlet.name === o.name ? '<span style="color:var(--primary);font-weight:600">Aktif</span>' : ''}
-            </button>`).join('')}
+  const initial = state.user.displayName.charAt(0).toUpperCase();
+  const sub = isOwner ? 'Owner' : 'Kasir';
+  const outlet = state.user.outlet || state.outlet.name;
+
+  openSheet(`
+    <div class="account-head">
+      <div class="account-avatar">${initial}</div>
+      <div class="account-info">
+        <div class="account-name">${state.user.displayName}</div>
+        <div class="account-sub">${sub} · ${outlet}</div>
+      </div>
+    </div>
+
+    <div class="tx-list" style="margin-top:1rem">
+      <button class="list-row" id="acct-view-profile">
+        <div>
+          <div class="row-title">Profil</div>
+          <div class="row-sub">Info akun kamu</div>
         </div>
-      `);
-      $$('[data-outlet]').forEach(b => b.onclick = () => {
-        const o = state.outlets.find(x => x.name === b.dataset.outlet);
-        state.outlet = o;
-        $('#outlet-name').textContent = o.name;
-        state.settings.receipt.bizName = o.name;
-        closeSheet();
-        renderTabletSidebar();
-        toast('Outlet diganti: ' + o.name);
-      });
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
+      ${isOwner ? `
+        <button class="list-row" id="acct-change-outlet">
+          <div>
+            <div class="row-title">Ganti outlet</div>
+            <div class="row-sub">Saat ini: ${state.outlet.name}</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+        </button>` : ''}
+    </div>
+
+    <button class="btn btn-danger btn-block" id="acct-logout" style="margin-top:1.25rem">Keluar</button>
+  `);
+
+  $('#acct-view-profile').onclick = () => {
+    closeSheet();
+    state.manageRoute = isOwner ? 'profile' : 'cashier-profile';
+    pushNav(); renderNav(); renderMain();
+  };
+
+  if ($('#acct-change-outlet')) {
+    $('#acct-change-outlet').onclick = () => {
+      closeSheet();
+      setTimeout(() => $('#outlet-chip')?.click(), 60);
     };
-  } else {
-    nameEl.textContent = state.user.outlet || state.outlet.name;
-    chip.style.cursor = 'default';
-    chip.style.pointerEvents = 'none';
-    if (chev) chev.style.display = 'none';
-    chip.onclick = null;
   }
+
+  $('#acct-logout').onclick = () => {
+    closeSheet();
+    handleLogout();
+  };
+}
+
+// GO TO MANAGE
+function goToManage() {
+  if (!state.user) return;
+  const isOwner = state.user.role === 'owner';
+  const isInManage = isOwner ? state.ownerTab === 'manage' : state.activeView === 'manage';
+
+  if (isInManage && state.manageRoute) {
+    state.manageRoute = null;
+    renderMain();
+    return;
+  }
+  if (isInManage) {
+    if (isOwner) state.ownerTab = 'pos';
+    else state.activeView = hasPerm('pos') ? 'pos' : (hasPerm('dashboard') ? 'dashboard' : 'manage');
+    renderNav();
+    renderMain();
+    return;
+  }
+  if (isOwner) state.ownerTab = 'manage';
+  else state.activeView = 'manage';
+  state.manageRoute = null;
+  pushNav();
+  renderNav();
+  renderMain();
+}
+
+// GO TO PRINTER SETTINGS
+function goToPrinterSettings() {
+  if (!state.user) return;
+  if (state.user.role === 'owner') {
+    state.ownerTab = 'manage';
+    state.manageRoute = 'printer';
+  } else {
+    if (!hasPerm('printer')) return toast('Tidak ada akses printer', 'error');
+    state.activeView = 'manage';
+    state.manageRoute = 'cashier-printer';
+  }
+  pushNav();
+  renderNav();
+  renderMain();
 }
 
 // POS
@@ -901,7 +1131,7 @@ function renderPOS(main) {
       <div class="page-head">
         <div><h2>Kasir</h2><div class="sub">Mulai shift dulu untuk transaksi</div></div>
       </div>
-      <div class="empty" style="padding-top:60px">
+      <div class="empty" style="padding-top:3.75rem">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/>
           <path d="M12 6v6l4 2"/>
@@ -930,7 +1160,7 @@ function renderPOS(main) {
     <button class="shift-banner" id="pos-shift-banner">
       <span class="sync-dot" data-status="synced"></span>
       <div style="flex:1;min-width:0;text-align:left">
-        <div style="font-weight:600;font-size:13px;color:var(--text)">Shift aktif · ${s.startTime}</div>
+        <div style="font-weight:600;font-size:.8125rem;color:var(--text)">Shift aktif · ${s.startTime}</div>
         <div class="muted small">${s.transactions} transaksi · ${rupiah(s.cashSales + s.qrisSales)}</div>
       </div>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
@@ -940,12 +1170,14 @@ function renderPOS(main) {
   const cats = ['Semua', ...state.categories.filter(c => c.active).map(c => c.name)];
   main.innerHTML = `
     ${shiftBanner}
+    <div class="pos-tools" data-hoist="tools">
     <div class="pos-search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" placeholder="Cari produk…" id="pos-search-input" />
     </div>
     <div class="chip-row" id="cat-row">
       ${cats.map((c, i) => `<button class="chip ${i === 0 ? 'active' : ''}" data-cat="${c}">${c}</button>`).join('')}
+    </div>
     </div>
     <div class="product-grid" id="product-grid"></div>
   `;
@@ -1063,8 +1295,8 @@ function openShiftDetailSheet() {
   if (!s) return;
 
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:4px">Shift aktif</h3>
-    <p class="muted small" style="margin:0 0 16px">Mulai ${s.startTime} · ${state.user.displayName}</p>
+    <h3 style="font-size:1.0625rem;margin-bottom:.25rem">Shift aktif</h3>
+    <p class="muted small" style="margin:0 0 1rem">Mulai ${s.startTime} · ${state.user.displayName}</p>
 
     <div class="shift-rows">
       <div class="shift-row"><span class="lbl">Kas awal</span><span class="val">${rupiah(s.openingCash)}</span></div>
@@ -1075,7 +1307,7 @@ function openShiftDetailSheet() {
       <div class="shift-row expected"><span class="lbl">Expected cash</span><span class="val">${rupiah(s.openingCash + s.cashSales)}</span></div>
     </div>
 
-    <div style="display:grid;gap:8px;margin-top:16px">
+    <div style="display:grid;gap:.5rem;margin-top:1rem">
       <button class="btn btn-primary btn-block" id="open-close-shift">Tutup shift</button>
     </div>
   `);
@@ -1087,10 +1319,10 @@ function openShiftDetailSheet() {
 function openCloseShiftSheet(s) {
   const expected = s.openingCash + s.cashSales;
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:4px">Tutup shift</h3>
-    <p class="muted small" style="margin:0 0 16px">Hitung uang fisik, lalu masukkan jumlahnya.</p>
+    <h3 style="font-size:1.0625rem;margin-bottom:.25rem">Tutup shift</h3>
+    <p class="muted small" style="margin:0 0 1rem">Hitung uang fisik, lalu masukkan jumlahnya.</p>
     <div class="summary-row"><span>Expected cash</span><span>${rupiah(expected)}</span></div>
-    <label class="field" style="margin:12px 0"><span>Uang fisik (Rp)</span>
+    <label class="field" style="margin:.75rem 0"><span>Uang fisik (Rp)</span>
       <input type="text" inputmode="numeric" id="close-cash" value="${expected.toLocaleString('id-ID')}" /></label>
     <button class="btn btn-primary btn-block" id="do-close">Tutup shift</button>
   `);
@@ -1183,39 +1415,39 @@ function openCheckout() {
     const change = cashReceived - t.total;
 
     openSheet(`
-      <h3 style="font-size:17px;margin-bottom:12px">Pembayaran</h3>
-      <div style="text-align:center;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:16px">
+      <h3 style="font-size:1.0625rem;margin-bottom:.75rem">Pembayaran</h3>
+      <div style="text-align:center;padding:1rem 0;border-bottom:1px solid var(--border);margin-bottom:1rem">
         <div class="muted small">Total</div>
-        <div id="ck-total-hero" style="font-size:32px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.02em">${rupiah(t.total)}</div>
+        <div id="ck-total-hero" style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-0.02em">${rupiah(t.total)}</div>
       </div>
       <div class="section-title" style="margin-top:0">Diskon & Pajak</div>
-      <div class="form-row" style="margin-bottom:16px">
+      <div class="form-row" style="margin-bottom:1rem">
         <label class="field"><span>Diskon (Rp)</span>
           <input type="text" inputmode="numeric" id="in-disc" value="${discount ? discount.toLocaleString('id-ID') : ''}" placeholder="0" /></label>
         <label class="field"><span>Pajak (%)</span>
           <input type="number" id="in-tax" value="${taxPct}" min="0" max="100" step="1" /></label>
       </div>
       <div class="section-title" style="margin-top:0">Metode Pembayaran</div>
-      <div class="form-row" style="margin-bottom:16px">
+      <div class="form-row" style="margin-bottom:1rem">
         <button class="btn ${method === 'cash' ? 'btn-primary' : 'btn-ghost'}" id="m-cash">Cash</button>
         <button class="btn ${method === 'qris' ? 'btn-primary' : 'btn-ghost'}" id="m-qris">QRIS</button>
       </div>
       ${method === 'cash' ? `
-        <label class="field" style="margin-bottom:10px"><span>Uang diterima</span>
+        <label class="field" style="margin-bottom:.625rem"><span>Uang diterima</span>
           <input type="text" inputmode="numeric" id="in-cash" value="${cashReceived ? cashReceived.toLocaleString('id-ID') : ''}" placeholder="0" /></label>
-        <div style="display:flex;gap:8px;margin-bottom:16px">
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem">
           <button class="btn btn-ghost" data-quick="${t.total}">Pas</button>
           <button class="btn btn-ghost" data-quick="50000">50rb</button>
           <button class="btn btn-ghost" data-quick="100000">100rb</button>
         </div>
-        <div class="summary-row" style="font-size:16px">
+        <div class="summary-row" style="font-size:1rem">
           <span>Kembalian</span>
           <span id="ck-change" style="color:${change >= 0 ? 'var(--cash)' : 'var(--text-muted)'};font-weight:700">${change >= 0 ? rupiah(change) : '—'}</span>
         </div>
       ` : `
         <div class="qris-display">
           ${state.settings.qris.image
-            ? `<img src="${state.settings.qris.image}" alt="QRIS" style="max-width:220px;margin:0 auto;display:block;border-radius:var(--radius-sm)" />`
+            ? `<img src="${state.settings.qris.image}" alt="QRIS" style="max-width:13.75rem;margin:0 auto;display:block;border-radius:var(--radius-sm)" />`
             : `<div class="qris-placeholder">
                 <svg width="140" height="140" viewBox="0 0 100 100" fill="none">
                   <rect x="4" y="4" width="30" height="30" stroke="currentColor" stroke-width="4"/>
@@ -1243,14 +1475,14 @@ function openCheckout() {
                 </svg>
                 <div class="qris-hint">Scan QR ini untuk membayar</div>
               </div>`}
-          <div class="muted small" style="margin-top:12px">Setelah customer scan & bayar, tap <b>Bayar</b> untuk foto bukti QRIS.</div>
+          <div class="muted small" style="margin-top:.75rem">Setelah customer scan & bayar, tap <b>Bayar</b> untuk foto bukti QRIS.</div>
         </div>
       `}
       <div class="summary-row"><span>Subtotal</span><span id="ck-subtotal">${rupiah(t.subtotal)}</span></div>
       <div class="summary-row"><span>Diskon</span><span id="ck-discount-row" style="color:var(--alert)">${t.discount > 0 ? '-' + rupiah(t.discount) : ''}</span></div>
       <div class="summary-row"><span>Pajak ${taxPct}%</span><span id="ck-tax-row">${t.tax > 0 ? rupiah(t.tax) : ''}</span></div>
       <div class="summary-row total"><span>Total</span><span id="ck-total">${rupiah(t.total)}</span></div>
-      <div style="display:grid;gap:8px;margin-top:16px">
+      <div style="display:grid;gap:.5rem;margin-top:1rem">
         <button type="button" class="btn btn-primary btn-block" id="pay-btn">Bayar ${rupiah(t.total)}</button>
       </div>
     `);
@@ -1358,12 +1590,12 @@ function renderCheckout(main) {
   const { subtotal } = calculateTotals(state.cart);
 
   main.innerHTML = `
-    <div class="page-head">
+    <div class="page-head ph-hoist">
       <div>
         <h2>Checkout</h2>
         <div class="sub">${cartCount ? cartCount + ' item siap dibayar' : 'Belum ada item di cart'}</div>
       </div>
-      ${cartCount ? '<button class="btn btn-ghost" id="clear-cart-page">Kosongkan</button>' : ''}
+      ${cartCount ? '<div data-hoist="actions"><button class="btn btn-ghost" id="clear-cart-page">Kosongkan</button></div>' : ''}
     </div>
 
     ${cartCount ? `
@@ -1498,10 +1730,7 @@ function showTxDetail(id) {
   const isOwner = state.user.role === 'owner';
   const isMyTx = tx.cashierId === state.user.username;
 
-  // void hanya owner
   const canVoid = tx.status === 'completed' && isOwner;
-
-  // refund: owner atau kasir (dengan limit + PIN owner kalau melebihi)
   const canRefund = (tx.status === 'completed' || tx.status === 'partial_refund') &&
     (isOwner || (isMyTx && hasPerm('refund')));
 
@@ -1509,17 +1738,17 @@ function showTxDetail(id) {
   if (tx.status === 'void') {
     statusBanner = `<div class="status-banner void">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg>
-      <div><strong>VOID</strong>${tx.voidReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.voidedByName || '-'} · ${tx.voidedAt || ''}</span></div>
+      <div><strong>VOID</strong>${tx.voidReason || ''}<br><span style="font-size:.6875rem;opacity:.8">oleh ${tx.voidedByName || '-'} · ${tx.voidedAt || ''}</span></div>
     </div>`;
   } else if (tx.status === 'refunded') {
     statusBanner = `<div class="status-banner refund">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
-      <div><strong>REFUND PENUH</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
+      <div><strong>REFUND PENUH</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:.6875rem;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
     </div>`;
   } else if (tx.status === 'partial_refund') {
     statusBanner = `<div class="status-banner refund">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/></svg>
-      <div><strong>REFUND SEBAGIAN</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:11px;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
+      <div><strong>REFUND SEBAGIAN</strong>${rupiah(tx.refundAmount)} · ${tx.refundMethod === 'cash' ? 'Cash' : 'QRIS'} · ${tx.refundReason || ''}<br><span style="font-size:.6875rem;opacity:.8">oleh ${tx.refundedByName || '-'} · ${tx.refundedAt || ''}</span></div>
     </div>`;
   }
 
@@ -1531,7 +1760,7 @@ function showTxDetail(id) {
         proofHtml = `<div class="proof-viewer"><div class="proof-expired">⚠ Bukti QRIS kadaluarsa<br><span class="small">Retensi ${state.settings.qris.retentionDays} hari</span></div></div>`;
       } else {
         proofHtml = `<div class="proof-viewer">
-          <div class="muted small" style="margin-bottom:6px">Bukti QRIS · ${formatTimestamp(tx.qrisProof.capturedAt)}</div>
+          <div class="muted small" style="margin-bottom:.375rem">Bukti QRIS · ${formatTimestamp(tx.qrisProof.capturedAt)}</div>
           <img src="${tx.qrisProof.dataUrl}" id="tx-proof-img" />
         </div>`;
       }
@@ -1544,8 +1773,8 @@ function showTxDetail(id) {
   const isSingle = !(canVoid && canRefund);
 
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:4px">${tx.id}</h3>
-    <p class="muted small" style="margin:0 0 16px">${tx.date} · ${tx.time} · ${tx.outlet}</p>
+    <h3 style="font-size:1.0625rem;margin-bottom:.25rem">${tx.id}</h3>
+    <p class="muted small" style="margin:0 0 1rem">${tx.date} · ${tx.time} · ${tx.outlet}</p>
     ${statusBanner}
     <div class="shift-rows">
       <div class="shift-row"><span class="lbl">Kasir</span><span class="val">${tx.cashier}</span></div>
@@ -1557,7 +1786,7 @@ function showTxDetail(id) {
     <div class="section-title">Item</div>
     <div class="cart-list" style="padding:0">
       ${tx.items.map(i => `
-        <div class="cart-item" style="padding:8px 0">
+        <div class="cart-item" style="padding:.5rem 0">
           <div><div class="ci-name">${i.name}</div><div class="ci-price">${rupiah(i.price)} × ${i.qty}</div></div>
           <div class="ci-total">${rupiah(i.price * i.qty)}</div>
         </div>`).join('')}
@@ -1569,7 +1798,7 @@ function showTxDetail(id) {
     ${tx.method === 'cash' ? `
       <div class="summary-row"><span>Diterima</span><span>${rupiah(tx.received)}</span></div>
       <div class="summary-row"><span>Kembalian</span><span>${rupiah(tx.change)}</span></div>` : ''}
-    <div style="display:grid;gap:8px;margin-top:16px">
+    <div style="display:grid;gap:.5rem;margin-top:1rem">
       <button class="btn btn-primary btn-block" id="print-again">Cetak ulang struk</button>
       ${showActions ? `
         <div class="tx-actions-2 ${isSingle ? 'single' : ''}">
@@ -1609,9 +1838,9 @@ function openVoidSheet(tx) {
 
   const render = () => {
     openSheet(`
-      <h3 style="font-size:17px;margin-bottom:4px">Void transaksi</h3>
-      <p class="muted small" style="margin:0 0 16px">${tx.id} · ${rupiah(tx.total)} · ${tx.method === 'cash' ? 'Cash' : 'QRIS'}</p>
-      <div class="status-banner void" style="margin-bottom:16px">
+      <h3 style="font-size:1.0625rem;margin-bottom:.25rem">Void transaksi</h3>
+      <p class="muted small" style="margin:0 0 1rem">${tx.id} · ${rupiah(tx.total)} · ${tx.method === 'cash' ? 'Cash' : 'QRIS'}</p>
+      <div class="status-banner void" style="margin-bottom:1rem">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
         <div>Void tidak menghapus transaksi dari riwayat. Transaksi akan ditandai VOID dan tidak dihitung di penjualan.</div>
       </div>
@@ -1620,10 +1849,10 @@ function openVoidSheet(tx) {
         ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
       </div>
       ${reason === 'Lainnya' ? `
-        <label class="field" style="margin-top:12px"><span>Keterangan</span>
+        <label class="field" style="margin-top:.75rem"><span>Keterangan</span>
           <input type="text" id="void-note" placeholder="Tulis alasan…" /></label>
       ` : ''}
-      <div class="form-actions" style="margin-top:20px">
+      <div class="form-actions" style="margin-top:1.25rem">
         <button class="btn btn-ghost" id="void-cancel">Batal</button>
         <button class="btn btn-danger" id="void-confirm">Void transaksi</button>
       </div>
@@ -1671,8 +1900,8 @@ function openRefundSheet(tx) {
     const exceedsLimit = !isOwner && totalRefund > sec.refundLimitCashier;
 
     openSheet(`
-      <h3 style="font-size:17px;margin-bottom:4px">Refund transaksi</h3>
-      <p class="muted small" style="margin:0 0 16px">${tx.id} · Total asli ${rupiah(tx.total)}</p>
+      <h3 style="font-size:1.0625rem;margin-bottom:.25rem">Refund transaksi</h3>
+      <p class="muted small" style="margin:0 0 1rem">${tx.id} · Total asli ${rupiah(tx.total)}</p>
       <div class="section-title" style="margin-top:0">Pilih item yang di-refund</div>
       <div class="refund-items">
         ${refundable.map(it => `
@@ -1688,17 +1917,17 @@ function openRefundSheet(tx) {
           </div>
         `).join('')}
       </div>
-      <div class="summary-row total" style="margin-top:12px">
+      <div class="summary-row total" style="margin-top:.75rem">
         <span>Total refund</span>
         <span style="color:var(--warn)">${rupiah(totalRefund)}</span>
       </div>
       ${exceedsLimit ? `
-        <div class="status-banner refund" style="margin-top:12px">
+        <div class="status-banner refund" style="margin-top:.75rem">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
           <div>Nominal refund (${rupiah(totalRefund)}) melebihi limit kasir (${rupiah(sec.refundLimitCashier)}). Butuh PIN owner.</div>
         </div>` : ''}
       <div class="section-title">Metode refund</div>
-      <div class="form-row" style="margin-bottom:12px">
+      <div class="form-row" style="margin-bottom:.75rem">
         <button class="btn ${method === 'cash' ? 'btn-primary' : 'btn-ghost'}" id="rf-cash">Cash</button>
         <button class="btn ${method === 'qris' ? 'btn-primary' : 'btn-ghost'}" id="rf-qris">QRIS</button>
       </div>
@@ -1707,10 +1936,10 @@ function openRefundSheet(tx) {
         ${REASONS.map(r => `<button class="reason-chip ${r === reason ? 'active' : ''}" data-r="${r}">${r}</button>`).join('')}
       </div>
       ${reason === 'Lainnya' ? `
-        <label class="field" style="margin-top:12px"><span>Keterangan</span>
+        <label class="field" style="margin-top:.75rem"><span>Keterangan</span>
           <input type="text" id="rf-note" placeholder="Tulis alasan…" /></label>
       ` : ''}
-      <div class="form-actions" style="margin-top:20px">
+      <div class="form-actions" style="margin-top:1.25rem">
         <button class="btn btn-ghost" id="rf-cancel">Batal</button>
         <button class="btn btn-primary" id="rf-confirm" ${totalRefund > 0 ? '' : 'disabled'}>
           ${refundLabel} · ${rupiah(totalRefund)}
@@ -1781,7 +2010,7 @@ function openRefundSheet(tx) {
   render();
 }
 
-// SHIFT PAGE (standalone, tidak jadi nav item)
+// SHIFT PAGE (standalone)
 function renderShift(main) {
   const s = state.activeShift;
   main.innerHTML = `
@@ -1797,7 +2026,7 @@ function renderShift(main) {
           <div class="shift-row"><span class="lbl">QRIS</span><span class="val">${rupiah(s.qrisSales)}</span></div>
           <div class="shift-row expected"><span class="lbl">Expected cash</span><span class="val">${rupiah(s.openingCash + s.cashSales)}</span></div>
         </div>
-        <button class="btn btn-primary btn-block" id="close-shift" style="margin-top:8px">Tutup shift</button>
+        <button class="btn btn-primary btn-block" id="close-shift" style="margin-top:.5rem">Tutup shift</button>
       </div>
     ` : `
       <div class="empty">
@@ -1975,9 +2204,9 @@ function renderReports(main) {
     const userText = rf.user === 'all' ? 'Semua kasir' : (state.workers.find(w => w.username === rf.user)?.displayName || rf.user);
 
     main.innerHTML = `
-      <div class="page-head">
+      <div class="page-head ph-hoist">
         <div><h2>Laporan</h2><div class="sub">${periodText} · ${userText}</div></div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:.5rem" data-hoist="actions">
           <button class="btn btn-ghost" id="open-filter">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg>
             Filter
@@ -1986,7 +2215,7 @@ function renderReports(main) {
         </div>
       </div>
 
-      <div class="seg-tabs" role="tablist">
+      <div class="seg-tabs" role="tablist" data-hoist="tools">
         ${TABS.map(t => `
           <button class="seg-tab ${tab === t.id ? 'active' : ''}" data-tab="${t.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
@@ -2019,16 +2248,16 @@ function renderReports(main) {
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:1rem 0 .75rem">
           <div><div style="font-weight:600">Daftar pengeluaran</div><div class="muted small">${expensesInPeriod.length} catatan di periode ini</div></div>
-          <button class="btn btn-primary" id="add-exp-report" style="min-height:36px;padding:8px 14px;font-size:13px">+ Tambah</button>
+          <button class="btn btn-primary" id="add-exp-report" style="min-height:2.25rem;padding:.5rem .875rem;font-size:.8125rem">+ Tambah</button>
         </div>
 
         <div class="tx-list">
           ${expensesInPeriod.length ? expensesInPeriod.map(e => `
             <div class="list-row">
               <div><div class="row-title">${e.note || e.category}</div><div class="row-sub">${e.category} · ${e.date} · ${e.by}</div></div>
-              <div style="display:flex;align-items:center;gap:8px">
+              <div style="display:flex;align-items:center;gap:.5rem">
                 <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
                 <div class="row-actions">
                   <button class="icon-btn sm" data-edit-exp="${e.id}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
@@ -2115,9 +2344,9 @@ function renderReports(main) {
           ${refundAmount > 0 ? `<div class="shift-row"><span class="lbl">Refund</span><span class="val" style="color:var(--warn)">- ${rupiah(refundAmount)}</span></div>` : ''}
           <div class="shift-row"><span class="lbl">Net sales</span><span class="val">${rupiah(sales)}</span></div>
           <div class="shift-row"><span class="lbl">Pengeluaran</span><span class="val" style="color:var(--alert)">- ${rupiah(expenseInPeriod)}</span></div>
-          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:10px">
+          <div class="shift-row" style="border-top:1px solid var(--border);margin-top:.25rem;padding-top:.625rem">
             <span class="lbl" style="font-weight:600;color:var(--text)">Net profit</span>
-            <span class="val" style="color:var(--primary);font-size:16px">${rupiah(net)}</span>
+            <span class="val" style="color:var(--primary);font-size:1rem">${rupiah(net)}</span>
           </div>
         </div>
 
@@ -2195,14 +2424,14 @@ function openFilterSheet(onApply) {
 
   const renderSheet = () => {
     openSheet(`
-      <h3 style="font-size:17px;margin-bottom:12px">Filter Laporan</h3>
+      <h3 style="font-size:1.0625rem;margin-bottom:.75rem">Filter Laporan</h3>
 
       <div class="section-title" style="margin-top:0">Periode</div>
       <div class="chip-row" id="filter-period-row">
         ${PERIODS.map(p => `<button class="chip ${period === p.id ? 'active' : ''}" data-p="${p.id}">${p.label}</button>`).join('')}
       </div>
       ${period === 'custom' ? `
-        <div class="form-row" style="margin-top:12px;margin-bottom:8px">
+        <div class="form-row" style="margin-top:.75rem;margin-bottom:.5rem">
           <label class="field"><span>Dari</span><input type="date" id="f-from" value="${dateFrom}" /></label>
           <label class="field"><span>Sampai</span><input type="date" id="f-to" value="${dateTo}" /></label>
         </div>
@@ -2218,7 +2447,7 @@ function openFilterSheet(onApply) {
         `).join('')}
       </div>
 
-      <div class="form-actions" style="margin-top:16px">
+      <div class="form-actions" style="margin-top:1rem">
         <button class="btn btn-ghost" id="f-reset">Reset</button>
         <button class="btn btn-primary" id="f-apply">Terapkan</button>
       </div>
@@ -2252,8 +2481,8 @@ function openFilterSheet(onApply) {
 
 // MANAGE PAGE
 function backToManageBtn() {
-  return `<button class="icon-btn" id="back-manage" title="Kembali ke Kelola" aria-label="Kembali ke Kelola">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+  return `<button class="back-btn" id="back-manage" data-hoist="back" title="Kembali ke Kelola" aria-label="Kembali ke Kelola">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
   </button>`;
 }
 function bindBackToManage() {
@@ -2277,18 +2506,13 @@ function renderManage() {
         hasPerm('sync')    && { label: 'Sinkronisasi', sub: 'Status & queue', route: 'cashier-sync' },
       ].filter(Boolean) },
       { title: 'Akun', items: [
-        hasPerm('theme')   && { label: 'Tema', sub: state.theme === 'dark' ? 'Mode gelap' : 'Mode terang', route: 'cashier-theme' },
-        hasPerm('profile') && { label: 'Profil', sub: 'Info akun kamu', route: 'cashier-profile' },
+        hasPerm('theme') && { label: 'Tema', sub: state.theme === 'dark' ? 'Mode gelap' : 'Mode terang', route: 'cashier-theme' },
       ].filter(Boolean) },
     ].filter(g => g.items.length > 0);
 
     main.innerHTML = `
       <div class="page-head">
         <div><h2>Kelola</h2><div class="sub">Menu kasir</div></div>
-        <button class="manage-logout-btn" id="manage-logout">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-          Keluar
-        </button>
       </div>
 
       ${groups.length ? groups.map(g => `
@@ -2309,7 +2533,6 @@ function renderManage() {
       `).join('') : '<div class="empty"><div class="empty-title">Tidak ada akses</div><div class="empty-sub">Hubungi owner untuk mengaktifkan fitur.</div></div>'}
     `;
 
-    $('#manage-logout').onclick = handleLogout;
     $$('[data-route]').forEach(el => {
       el.onclick = () => {
         state.manageRoute = el.dataset.route;
@@ -2344,7 +2567,6 @@ function renderManage() {
       { label: 'Keamanan', sub: 'Aturan void & refund', route: 'security-settings' },
       { label: 'Audit Log', sub: 'Riwayat aktivitas', route: 'audit-log', count: state.auditLog.length || null },
       { label: 'Tema', sub: state.theme === 'dark' ? 'Mode gelap' : 'Mode terang', route: 'theme-settings' },
-      { label: 'Profil', sub: 'Info akun kamu', route: 'profile' },
       { label: 'Tentang', sub: 'Info aplikasi', route: 'about' },
     ]},
   ];
@@ -2352,10 +2574,6 @@ function renderManage() {
   main.innerHTML = `
     <div class="page-head">
       <div><h2>Kelola</h2><div class="sub">Menu owner</div></div>
-      <button class="manage-logout-btn" id="manage-logout">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
-        Keluar
-      </button>
     </div>
 
     ${groups.map(g => `
@@ -2378,7 +2596,6 @@ function renderManage() {
     `).join('')}
   `;
 
-  $('#manage-logout').onclick = handleLogout;
   $$('[data-route]').forEach(el => {
     el.onclick = () => {
       state.manageRoute = el.dataset.route;
@@ -2421,12 +2638,12 @@ function pageProducts() {
       <div><h2>Produk</h2><div class="sub">${state.products.length} produk</div></div>
       ${backToManageBtn()}
     </div>
-    <div class="pos-search" style="margin-bottom:12px">
+    <div class="pos-search" style="margin-bottom:.75rem">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input type="text" placeholder="Cari produk…" id="prod-search" />
     </div>
     <div class="tx-list" id="prod-list"></div>
-    <button class="fab no-nav" id="add-prod">+</button>
+    <button class="fab no-nav" data-hoist="actions" id="add-prod"><span class="fab-plus">+</span><span class="fab-label">Tambah</span></button>
   `;
   renderProdList();
   $('#prod-search').oninput = renderProdList;
@@ -2447,7 +2664,7 @@ function renderProdList() {
         <div class="row-title">${p.name} ${p.active ? '' : '<span class="pill pill-inactive">nonaktif</span>'}</div>
         <div class="row-sub">${p.cat} · /${p.unit} · ${p.track ? 'stok ' + p.stock : 'tanpa tracking'}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:.5rem">
         <div class="row-amount">${rupiah(p.price)}</div>
         <div class="row-actions">
           <button class="icon-btn sm" data-edit="${p.id}">
@@ -2476,7 +2693,7 @@ function productForm(id) {
   const isEdit = !!p;
   const data = p || { name: '', price: 0, unit: '', cat: state.categories[0]?.name || '', stock: 0, low: 5, track: true, active: true };
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit produk' : 'Produk baru'}</h3>
+    <h3 style="font-size:1.0625rem;margin-bottom:1rem">${isEdit ? 'Edit produk' : 'Produk baru'}</h3>
     <div class="form-page">
       <label class="field"><span>Nama produk</span><input type="text" id="p-name" value="${data.name}" /></label>
       <div class="form-row">
@@ -2557,7 +2774,7 @@ function pageCategories() {
             </div>`;
         }).join('')}
       </div>
-      <button class="fab no-nav" id="add-cat">+</button>
+      <button class="fab no-nav" data-hoist="actions" id="add-cat"><span class="fab-plus">+</span><span class="fab-label">Tambah</span></button>
     `;
     bindBackToManage();
     $('#add-cat').onclick = () => {
@@ -2618,7 +2835,7 @@ function pageInventory() {
                 <div class="row-title">${p.name} ${badge}</div>
                 <div class="row-sub">${p.cat} · low threshold ${p.low}</div>
               </div>
-              <div style="display:flex;align-items:center;gap:8px">
+              <div style="display:flex;align-items:center;gap:.5rem">
                 <div class="row-amount">${p.stock} ${p.unit}</div>
                 <div class="row-actions">
                   <button class="icon-btn sm" data-adjust="${p.id}">
@@ -2634,14 +2851,14 @@ function pageInventory() {
     $$('[data-adjust]').forEach(b => b.onclick = () => {
       const p = state.products.find(x => x.id === parseInt(b.dataset.adjust));
       openSheet(`
-        <h3 style="font-size:17px;margin-bottom:4px">${p.name}</h3>
-        <p class="muted small" style="margin:0 0 16px">Stok saat ini: ${p.stock} ${p.unit}</p>
-        <div class="form-row" style="margin-bottom:12px">
+        <h3 style="font-size:1.0625rem;margin-bottom:.25rem">${p.name}</h3>
+        <p class="muted small" style="margin:0 0 1rem">Stok saat ini: ${p.stock} ${p.unit}</p>
+        <div class="form-row" style="margin-bottom:.75rem">
           <button class="btn btn-ghost" id="mode-plus">+ Tambah</button>
           <button class="btn btn-primary" id="mode-minus">− Kurang</button>
         </div>
         <label class="field"><span>Jumlah</span><input type="number" id="adj-qty" min="1" value="1" /></label>
-        <div class="form-actions" style="margin-top:16px">
+        <div class="form-actions" style="margin-top:1rem">
           <button class="btn btn-ghost" id="adj-cancel">Batal</button>
           <button class="btn btn-primary" id="adj-save">Simpan</button>
         </div>
@@ -2690,7 +2907,7 @@ function pageOutlets() {
             </div>
           </div>`).join('')}
       </div>
-      <button class="fab no-nav" id="add-outlet">+</button>
+      <button class="fab no-nav" data-hoist="actions" id="add-outlet"><span class="fab-plus">+</span><span class="fab-label">Tambah</span></button>
     `;
     bindBackToManage();
     $('#add-outlet').onclick = () => outletForm(null);
@@ -2711,7 +2928,7 @@ function outletForm(id) {
   const isEdit = !!o;
   const data = o || { name: '', address: '', phone: '', active: true };
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit outlet' : 'Outlet baru'}</h3>
+    <h3 style="font-size:1.0625rem;margin-bottom:1rem">${isEdit ? 'Edit outlet' : 'Outlet baru'}</h3>
     <div class="form-page">
       <label class="field"><span>Nama outlet</span><input type="text" id="o-name" value="${data.name}" /></label>
       <label class="field"><span>Alamat</span><input type="text" id="o-address" value="${data.address}" /></label>
@@ -2770,7 +2987,7 @@ function pageWorkers() {
             </div>`;
         }).join('')}
       </div>
-      <button class="fab no-nav" id="add-worker">+</button>
+      <button class="fab no-nav" data-hoist="actions" id="add-worker"><span class="fab-plus">+</span><span class="fab-label">Tambah</span></button>
     `;
     bindBackToManage();
     $('#add-worker').onclick = () => workerForm(null);
@@ -2794,7 +3011,7 @@ function workerForm(id) {
   const currentPerms = data.permissions || [];
 
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit kasir' : 'Kasir baru'}</h3>
+    <h3 style="font-size:1.0625rem;margin-bottom:1rem">${isEdit ? 'Edit kasir' : 'Kasir baru'}</h3>
     <div class="form-page">
       <label class="field"><span>Nama tampilan</span><input type="text" id="w-name" value="${data.displayName}" /></label>
       <label class="field"><span>Username</span><input type="text" id="w-user" value="${data.username}" ${isEdit ? 'disabled' : ''} /></label>
@@ -2812,11 +3029,11 @@ function workerForm(id) {
         <div style="font-weight:500">Akun aktif</div>
         <button class="switch ${data.active ? 'on' : ''}" id="w-active"></button>
       </div>
-      <div class="section-title" style="margin:16px 0 8px">Akses Fitur</div>
-      <p class="muted small" style="margin:-6px 0 8px">Pilih fitur yang boleh dipakai kasir ini.</p>
+      <div class="section-title" style="margin:1rem 0 .5rem">Akses Fitur</div>
+      <p class="muted small" style="margin:-.375rem 0 .5rem">Pilih fitur yang boleh dipakai kasir ini.</p>
       <div id="w-perms">
         ${PERMISSIONS.map(p => `
-          <div class="switch-row" style="align-items:flex-start;gap:12px">
+          <div class="switch-row" style="align-items:flex-start;gap:.75rem">
             <div style="flex:1">
               <div style="font-weight:500">${p.label}</div>
               <div class="muted small">${p.desc}</div>
@@ -2920,7 +3137,7 @@ function pageShiftHistory() {
       </div>
 
       <div class="section-title">Filter</div>
-      <div class="form-row" style="margin-bottom:16px">
+      <div class="form-row" style="margin-bottom:1rem">
         <label class="field"><span>Kasir</span>
           <select id="sh-filter-cashier">
             ${cashierOptions.map(c => `<option value="${c.id}" ${filterCashier === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
@@ -2942,14 +3159,14 @@ function pageShiftHistory() {
           const varianceColor = sh.variance === 0 ? 'var(--cash)' : 'var(--alert)';
           const varianceText = sh.variance === 0 ? 'Pas' : rupiah(sh.variance);
           return `
-            <div class="shift-card" style="padding:14px;margin-bottom:8px">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">
+            <div class="shift-card" style="padding:.875rem;margin-bottom:.5rem">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.625rem;margin-bottom:.625rem">
                 <div>
-                  <div style="font-weight:600;font-size:14px">${sh.cashierName || '-'}</div>
+                  <div style="font-weight:600;font-size:.875rem">${sh.cashierName || '-'}</div>
                   <div class="muted small">${sh.outlet || '-'} · ${sh.id}</div>
                 </div>
                 <div style="text-align:right">
-                  <div style="font-weight:700;font-size:14px">${rupiah(sh.cash + sh.qris)}</div>
+                  <div style="font-weight:700;font-size:.875rem">${rupiah(sh.cash + sh.qris)}</div>
                   <div class="muted small">${sh.tx} transaksi</div>
                 </div>
               </div>
@@ -2985,10 +3202,10 @@ function pageQRIS() {
         ${backToManageBtn()}
       </div>
       <div class="form-section">
-        <div style="text-align:center;padding:24px;border:1px dashed var(--border-strong);border-radius:var(--radius)">
+        <div style="text-align:center;padding:1.5rem;border:1px dashed var(--border-strong);border-radius:var(--radius)">
           ${state.settings.qris.image
-            ? `<div style="font-size:12px">QRIS ${state.outlet.name}</div>`
-            : `<div style="color:var(--text-faint);font-size:13px">Belum ada gambar QRIS</div>`}
+            ? `<div style="font-size:.75rem">QRIS ${state.outlet.name}</div>`
+            : `<div style="color:var(--text-faint);font-size:.8125rem">Belum ada gambar QRIS</div>`}
         </div>
         <div class="switch-row">
           <div><div style="font-weight:500">Aktifkan QRIS</div><div class="muted small">Muncul sebagai metode bayar di Kasir</div></div>
@@ -3112,7 +3329,7 @@ ${r.footer}`.trim();
       </div>
       <div class="section-title">Preview struk</div>
       <div class="receipt">${preview}</div>
-      <div class="form-actions" style="margin-top:16px">
+      <div class="form-actions" style="margin-top:1rem">
         <button class="btn btn-primary btn-block" id="r-save">Simpan</button>
       </div>
     `;
@@ -3168,7 +3385,7 @@ function pageSyncSettings() {
         <div class="shift-row"><span class="lbl">Status</span><span class="val">${state.online ? 'Online' : 'Offline'}</span></div>
         <div class="shift-row"><span class="lbl">Pending</span><span class="val">${state.syncQueue.length}</span></div>
       </div>
-      <div class="form-actions" style="margin-top:16px">
+      <div class="form-actions" style="margin-top:1rem">
         <button class="btn btn-primary btn-block" id="sync-now-btn" ${!state.online ? 'disabled' : ''}>
           ${state.online ? 'Sync sekarang' : 'Offline'}
         </button>
@@ -3205,7 +3422,7 @@ function pageSecuritySettings() {
           <input type="text" id="sec-pin" value="${sec.ownerPin}" maxlength="4" inputmode="numeric" /></label>
         <label class="field"><span>Alert kalau kasir refund ≥ X kali/hari</span>
           <input type="number" id="sec-alert" value="${sec.alertVoidPerDay}" min="1" max="100" /></label>
-        <div class="form-actions" style="margin-top:8px">
+        <div class="form-actions" style="margin-top:.5rem">
           <button class="btn btn-primary btn-block" id="sec-save">Simpan</button>
         </div>
       </div>
@@ -3279,32 +3496,157 @@ function pageThemeSettings() {
       </div>
     `;
     bindBackToManage();
-    $$('[data-theme]').forEach(b => b.onclick = () => { applyTheme(b.dataset.theme); render(); });
+    $$('#main [data-theme]').forEach(b => b.onclick = () => { applyTheme(b.dataset.theme); render(); });
   };
   render();
 }
 
-// PROFILE
+// PROFILE — owner: info pribadi + keamanan; kasir: info pribadi saja
 function pageProfile() {
   const main = $('#main');
-  const isManage = state.manageRoute;
+  const isOwner = state.user.role === 'owner';
+  const u = state.user;
+
   main.innerHTML = `
-    <div class="page-head">
-      <div><h2>Profil</h2></div>
-      ${isManage ? backToManageBtn() : ''}
+    <div class="profile-header">
+      <button class="back-btn" id="profile-back" aria-label="Kembali">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <h2>Profil Akun</h2>
     </div>
+
     <div class="form-section">
-      <div class="field"><span>Nama</span><input type="text" value="${state.user.displayName}" disabled /></div>
-      <div class="field"><span>Username</span><input type="text" value="${state.user.username}" disabled /></div>
-      <div class="field"><span>Role</span><input type="text" value="${state.user.role === 'owner' ? 'Owner' : 'Cashier'}" disabled /></div>
-      ${state.user.role === 'cashier' ? `<div class="field"><span>Outlet</span><input type="text" value="${state.user.outlet || '-'}" disabled /></div>` : ''}
+      <div class="profile-section-title">Informasi Pribadi</div>
+
+      <label class="field-icon">
+        <span>Nama</span>
+        <div class="input-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>
+          <input type="text" id="pf-name" value="${u.displayName || ''}" placeholder="Nama kamu" />
+        </div>
+      </label>
+
+      ${isOwner ? `
+        <label class="field-icon">
+          <span>Email</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+            <input type="email" id="pf-email" value="${u.email || ''}" readonly />
+          </div>
+        </label>
+      ` : `
+        <label class="field-icon">
+          <span>Username</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/></svg>
+            <input type="text" id="pf-username" value="${u.username || ''}" readonly />
+          </div>
+        </label>
+      `}
+
+      <label class="field-icon">
+        <span>WhatsApp</span>
+        <div class="input-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#25D366" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <input type="tel" id="pf-wa" value="${u.whatsapp || ''}" placeholder="Nomor WhatsApp (opsional)" />
+        </div>
+      </label>
+
+      <label class="field-icon">
+        <span>Role</span>
+        <div class="input-wrap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          <input type="text" id="pf-role" value="${isOwner ? 'Owner' : 'Kasir'}" readonly />
+        </div>
+      </label>
     </div>
-    <div class="form-actions" style="margin-top:16px">
-      <button class="btn btn-ghost btn-block" id="p-logout">Keluar</button>
+
+    ${isOwner ? `
+      <div class="form-section">
+        <div class="profile-section-title">Keamanan</div>
+
+        <label class="field-icon">
+          <span>Password Lama</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="pf-pw-old" placeholder="Masukkan password lama" autocomplete="current-password" />
+            <button type="button" class="eye-btn" data-eye="pf-pw-old" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Password Baru</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="pf-pw-new" placeholder="Masukkan password baru" autocomplete="new-password" />
+            <button type="button" class="eye-btn" data-eye="pf-pw-new" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <label class="field-icon">
+          <span>Konfirmasi Password Baru</span>
+          <div class="input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input type="password" id="pf-pw-confirm" placeholder="Ulangi password baru" autocomplete="new-password" />
+            <button type="button" class="eye-btn" data-eye="pf-pw-confirm" aria-label="Tampilkan password">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </label>
+      </div>
+    ` : ''}
+
+    <div class="sticky-save-bar">
+      <button class="btn btn-primary btn-block" id="pf-save">Simpan</button>
     </div>
   `;
-  if (isManage) bindBackToManage();
-  $('#p-logout').onclick = handleLogout;
+
+  main.classList.add('has-sticky-bar');
+  bindEyeToggles();
+
+  $('#profile-back').onclick = () => {
+    state.manageRoute = null;
+    renderMain();
+  };
+
+  $('#pf-save').onclick = () => {
+    const name = $('#pf-name').value.trim();
+    const wa = $('#pf-wa').value.trim();
+
+    if (!name) return toast('Nama wajib diisi', 'error');
+
+    if (isOwner) {
+      const pwOld = $('#pf-pw-old').value;
+      const pwNew = $('#pf-pw-new').value;
+      const pwConfirm = $('#pf-pw-confirm').value;
+
+      const anyPwFilled = pwOld || pwNew || pwConfirm;
+      if (anyPwFilled) {
+        if (!pwOld) return toast('Password lama wajib diisi', 'error');
+        if (!pwNew || pwNew.length < 6) return toast('Password baru minimal 6 karakter', 'error');
+        if (pwNew !== pwConfirm) return toast('Konfirmasi password tidak cocok', 'error');
+      }
+    }
+
+    state.user.displayName = name;
+    state.user.whatsapp = wa;
+
+    if (!isOwner) {
+      const w = state.workers.find(x => x.username === state.user.username);
+      if (w) {
+        w.displayName = name;
+        w.whatsapp = wa;
+      }
+    }
+
+    renderAvatar();
+    renderTabletSidebar();
+    toast('Profil diperbarui', 'success');
+  };
 }
 
 // ABOUT
@@ -3323,9 +3665,9 @@ function pageAbout() {
           <circle cx="17" cy="15" r="1.6" fill="var(--primary)"/>
         </svg>
       </div>
-      <div style="font-weight:600;font-size:16px">SakuKasir</div>
+      <div style="font-weight:600;font-size:1rem">SakuKasir</div>
       <div class="muted small">Versi prototipe · 2026</div>
-      <p class="muted small" style="margin:12px 0 0">Aplikasi kasir untuk usaha kecil dan menengah.</p>
+      <p class="muted small" style="margin:.75rem 0 0">Aplikasi kasir untuk usaha kecil dan menengah.</p>
     </div>
   `;
   bindBackToManage();
@@ -3351,14 +3693,14 @@ function pageExpenses() {
         <div class="delta">${state.expenses.length} catatan</div>
       </div>
 
-      <div class="kpi-compact" style="margin-bottom:16px">
+      <div class="kpi-compact" style="margin-bottom:1rem">
         ${CATS.map(cat => {
           const sum = state.expenses.filter(e => e.category === cat).reduce((s,e) => s + e.amount, 0);
           return `<div><div class="label">${cat}</div><div class="amount">${rupiah(sum)}</div></div>`;
         }).join('')}
       </div>
 
-      <div class="security-info" style="margin-bottom:12px">
+      <div class="security-info" style="margin-bottom:.75rem">
         Kasir hanya bisa <b>mencatat</b> pengeluaran (<b>Bahan</b> & <b>Operasional</b>). Untuk koreksi atau hapus, hubungi owner.
       </div>
 
@@ -3369,7 +3711,7 @@ function pageExpenses() {
               <div class="row-title">${e.note || e.category}</div>
               <div class="row-sub">${e.category} · ${e.date} · ${e.by}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;align-items:center;gap:.5rem">
               <div class="row-amount amount-expense">-${rupiah(e.amount)}</div>
               ${canEditDelete ? `
                 <div class="row-actions">
@@ -3407,7 +3749,7 @@ function expForm(id, CATS, onDone) {
   const isEdit = !!e;
   const data = e || { amount: 0, category: CATS[0], note: '', date: nowDateTime() };
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:16px">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
+    <h3 style="font-size:1.0625rem;margin-bottom:1rem">${isEdit ? 'Edit pengeluaran' : 'Pengeluaran baru'}</h3>
     <div class="form-page">
       <label class="field"><span>Nominal (Rp)</span>
         <input type="text" inputmode="numeric" id="e-amount" value="${data.amount ? data.amount.toLocaleString('id-ID') : ''}" placeholder="0" /></label>
@@ -3443,32 +3785,33 @@ function expForm(id, CATS, onDone) {
 
 // HEADER ACTIONS
 function updateSyncIndicator() {
-  const dot = $('#sync-indicator .sync-dot');
+  const btn = $('#sync-indicator');
   const banner = $('#offline-banner');
   const text = $('#offline-text');
   const pending = state.syncQueue.length;
+
   if (!state.online) {
-    dot.dataset.status = 'pending';
+    if (btn) btn.dataset.status = 'pending';
     banner.hidden = false;
     text.textContent = `Mode offline · ${pending} transaksi menunggu`;
   } else if (pending > 0) {
-    dot.dataset.status = 'pending';
+    if (btn) btn.dataset.status = 'pending';
     banner.hidden = false;
     text.textContent = `${pending} transaksi menunggu sinkron`;
   } else {
-    dot.dataset.status = 'synced';
+    if (btn) btn.dataset.status = 'synced';
     banner.hidden = true;
   }
   renderTabletSidebar();
 }
 $('#sync-indicator').onclick = () => {
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:4px">Sinkronisasi</h3>
-    <p class="muted small" style="margin:0 0 12px">Status: ${state.online ? 'Online' : 'Offline'}</p>
+    <h3 style="font-size:1.0625rem;margin-bottom:.25rem">Sinkronisasi</h3>
+    <p class="muted small" style="margin:0 0 .75rem">Status: ${state.online ? 'Online' : 'Offline'}</p>
     <div class="shift-rows">
       <div class="shift-row"><span class="lbl">Pending</span><span class="val">${state.syncQueue.length}</span></div>
     </div>
-    <div style="display:grid;gap:8px;margin-top:12px">
+    <div style="display:grid;gap:.5rem;margin-top:.75rem">
       <button class="btn btn-primary btn-block" id="do-sync" ${!state.online ? 'disabled' : ''}>${state.online ? 'Sync sekarang' : 'Offline'}</button>
       <button class="btn btn-ghost btn-block" id="toggle-online">${state.online ? 'Simulasikan offline' : 'Simulasikan online'}</button>
     </div>
@@ -3493,23 +3836,10 @@ $('#sync-now-inline').onclick = () => {
   updateSyncIndicator();
   toast('Sinkronisasi selesai', 'success');
 };
-$('#printer-indicator').onclick = () => {
-  if (state.user.role === 'owner') {
-    state.manageRoute = 'printer';
-    state.ownerTab = 'manage';
-  } else {
-    if (!hasPerm('printer')) return toast('Tidak ada akses printer', 'error');
-    state.manageRoute = 'cashier-printer';
-    state.activeView = 'manage';
-  }
-  pushNav();
-  renderNav();
-  renderMain();
-};
 $('#notif-btn').onclick = () => {
   const list = state.notifications;
   openSheet(`
-    <h3 style="font-size:17px;margin-bottom:12px">Notifikasi</h3>
+    <h3 style="font-size:1.0625rem;margin-bottom:.75rem">Notifikasi</h3>
     ${list.length ? `<div class="tx-list">
       ${list.map(n => `
         <div class="tx-item" style="grid-template-columns:1fr">
@@ -3528,28 +3858,6 @@ $('#notif-btn').onclick = () => {
   $('#notif-dot').style.display = 'none';
   state.notifications.forEach(n => n.read = true);
   renderTabletSidebar();
-};
-$('#manage-btn').onclick = () => {
-  if (!state.user) return;
-  if (state.user.role === 'owner') {
-    if (state.ownerTab === 'manage') {
-      try { history.back(); }
-      catch (e) { state.ownerTab = 'pos'; state.manageRoute = null; renderNav(); renderMain(); }
-      return;
-    }
-    state.ownerTab = 'manage';
-    state.manageRoute = null;
-    pushNav(); renderNav(); renderMain();
-    return;
-  }
-  if (state.activeView === 'manage') {
-    try { history.back(); }
-    catch (e) { state.activeView = 'pos'; state.manageRoute = null; renderNav(); renderMain(); }
-    return;
-  }
-  state.activeView = 'manage';
-  state.manageRoute = null;
-  pushNav(); renderNav(); renderMain();
 };
 $('#sheet-backdrop').onclick = closeSheet;
 
@@ -3585,10 +3893,10 @@ function printReceipt(tx) {
   const host = $('#receipt-host');
   host.innerHTML = `
     <div class="modal-backdrop" id="rc-bd">
-      <div class="modal" style="max-width:360px">
-        <h3 style="font-size:15px;margin-bottom:12px">Preview struk</h3>
+      <div class="modal" style="max-width:22.5rem">
+        <h3 style="font-size:.9375rem;margin-bottom:.75rem">Preview struk</h3>
         <div class="receipt">${text.replace(/</g,'&lt;')}</div>
-        <div class="modal-actions" style="margin-top:16px">
+        <div class="modal-actions" style="margin-top:1rem">
           <button class="btn btn-ghost" id="rc-close">Tutup</button>
           <button class="btn btn-primary" id="rc-print">Cetak</button>
         </div>
@@ -3623,3 +3931,4 @@ window.addEventListener('orientationchange', () => setTimeout(_handleTabletChang
 
 // INIT
 updateSyncIndicator();
+renderAvatar();
